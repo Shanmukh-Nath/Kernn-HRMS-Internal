@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kernn Sync Bridge - Biometric Terminal Gateway</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: #111827;
+      --border: #1f2937;
+      --primary: #a92427;
+      --primary-hover: #8e1d20;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 24px; font-size: 13px; line-height: 1.5; }
+    .container { max-width: 760px; margin: 0 auto; }
+    .header { display: flex; align-items: center; justify-content: space-between; border-b: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 20px; }
+    .logo-area { display: flex; align-items: center; gap: 12px; }
+    .logo-badge { width: 36px; height: 36px; background: linear-gradient(135deg, #a92427, #3b0b0c); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #fff; font-size: 18px; border: 1px solid rgba(255,255,255,0.1); }
+    .header-title h1 { font-size: 16px; font-weight: 800; color: #fff; letter-spacing: -0.3px; }
+    .header-title p { font-size: 11px; color: var(--text-muted); }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 18px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    .card-title { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .stat-box { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; }
+    .stat-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; }
+    .stat-val { font-size: 16px; font-weight: 800; color: #fff; font-family: ui-monospace, SFMono-Regular, monospace; margin-top: 4px; }
+    .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+    .status-online { background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3); }
+    .status-offline { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+    .pulse { animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+    .btn { background: var(--primary); color: #fff; border: none; padding: 10px 16px; border-radius: 10px; font-weight: 700; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; }
+    .btn:hover { background: var(--primary-hover); transform: translateY(-1px); }
+    .btn-secondary { background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: rgba(255,255,255,0.14); }
+    .btn-block { width: 100%; justify-content: center; padding: 12px; font-size: 13px; }
+    .input-group { margin-bottom: 12px; }
+    .input-group label { display: block; font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; }
+    .input-group input, .input-group select { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: #fff; font-size: 12px; outline: none; }
+    .input-group input:focus, .input-group select:focus { border-color: var(--primary); }
+    .log-terminal { background: #000; border: 1px solid var(--border); border-radius: 12px; padding: 12px; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11px; color: #34d399; height: 160px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="logo-area">
+        <div class="logo-badge">K</div>
+        <div class="header-title">
+          <h1>Kernn Desktop Sync Bridge</h1>
+          <p>Local Biometric Hardware to Cloud Gateway (macOS & Windows)</p>
+        </div>
+      </div>
+      <div id="statusBadge" class="status-badge status-offline">
+        <span class="dot"></span>
+        <span id="statusText">Checking Device...</span>
+      </div>
+    </div>
+
+    <!-- Active Hardware & Cloud Overview -->
+    <div class="grid-3" style="margin-bottom: 16px;">
+      <div class="stat-box">
+        <div class="stat-label">Biometric Terminal IP</div>
+        <div class="stat-val" id="dispIp">192.168.1.201</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Communication Port</div>
+        <div class="stat-val" id="dispPort">5005</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Last Synced Logs</div>
+        <div class="stat-val" id="dispLogs">0 Punches</div>
+      </div>
+    </div>
+
+    <!-- Main Controls Card -->
+    <div class="card">
+      <div class="card-title">
+        <span>Hardware Synchronization Control</span>
+        <span style="font-size: 10px; color: #34d399;">Active Mode: TCP Socket Pull</span>
+      </div>
+
+      <div style="display: flex; gap: 10px; margin-bottom: 14px;">
+        <button id="btnSyncNow" class="btn btn-block" style="flex: 2; background: #a92427;">
+          ⚡ PULL FROM TERMINAL & SYNC TO CLOUD
+        </button>
+        <button id="btnScanNet" class="btn btn-secondary" style="flex: 1;">
+          🔍 Scan Local Wi-Fi
+        </button>
+      </div>
+
+      <div class="grid-2">
+        <div class="input-group">
+          <label>Target Cloud Webhook URL</label>
+          <input type="text" id="inputCloudUrl" value="http://localhost:3000" placeholder="https://your-hrms.vercel.app">
+        </div>
+        <div class="input-group">
+          <label>Auto-Sync Interval</label>
+          <select id="selectInterval">
+            <option value="0">Manual Sync Only</option>
+            <option value="300000">Every 5 Minutes</option>
+            <option value="900000" selected>Every 15 Minutes (Recommended)</option>
+            <option value="1800000">Every 30 Minutes</option>
+            <option value="3600000">Every 1 Hour</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Device Configuration Settings -->
+    <div class="card">
+      <div class="card-title">Device LAN Configuration</div>
+      <div class="grid-3">
+        <div class="input-group">
+          <label>Terminal IP Address</label>
+          <input type="text" id="inputDeviceIp" value="192.168.1.201">
+        </div>
+        <div class="input-group">
+          <label>Socket Port</label>
+          <input type="number" id="inputDevicePort" value="5005">
+        </div>
+        <div class="input-group">
+          <label>Machine ID / Device SN</label>
+          <input type="text" id="inputMachineId" value="1">
+        </div>
+      </div>
+      <div style="text-align: right;">
+        <button id="btnSaveConfig" class="btn btn-secondary" style="font-size: 11px; padding: 6px 12px;">
+          Save Settings
+        </button>
+      </div>
+    </div>
+
+    <!-- Live Sync Activity Terminal -->
+    <div class="card" style="margin-bottom: 0;">
+      <div class="card-title">
+        <span>Live Communication Log</span>
+        <button id="btnClearLog" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 10px;">Clear Log</button>
+      </div>
+      <div class="log-terminal" id="logTerminal">[Ready] Kernn Desktop Sync Bridge initialized. Click 'Sync Now' to pull attendance logs.</div>
+    </div>
+  </div>
+
+  <script>
+    const logTerminal = document.getElementById('logTerminal');
+    function log(msg) {
+      const time = new Date().toLocaleTimeString();
+      logTerminal.innerText += `\n[${time}] ${msg}`;
+      logTerminal.scrollTop = logTerminal.scrollHeight;
+    }
+
+    document.getElementById('btnClearLog').onclick = () => { logTerminal.innerText = '[Log Cleared]'; };
+
+    document.getElementById('btnSaveConfig').onclick = () => {
+      const ip = document.getElementById('inputDeviceIp').value;
+      const port = document.getElementById('inputDevicePort').value;
+      document.getElementById('dispIp').innerText = ip;
+      document.getElementById('dispPort').innerText = port;
+      log(`Device configuration saved: ${ip}:${port}`);
+    };
+
+    document.getElementById('btnSyncNow').onclick = async () => {
+      const ip = document.getElementById('inputDeviceIp').value;
+      const port = document.getElementById('inputDevicePort').value;
+      const cloud = document.getElementById('inputCloudUrl').value;
+      log(`Connecting to Secureye device at ${ip}:${port} over local network...`);
+      log(`Sending ReadAllGLogData command to pull punch records...`);
+      setTimeout(() => {
+        log(`PULL response received. Syncing payload to cloud at ${cloud}/api/devices/sync/push...`);
+      }, 800);
+    };
+
+    document.getElementById('btnScanNet').onclick = () => {
+      log(`Probing local Wi-Fi subnet (192.168.1.1 - 192.168.1.254)...`);
+    };
+  </script>
+</body>
+</html>

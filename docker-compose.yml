@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # Main Web Application & Ingestion Service
+  web:
+    build: .
+    container_name: secureye-attendance-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+      - "5005:5005"
+    environment:
+      - DATABASE_URL=postgresql://postgres:secureye_secret@postgres:5432/secureye_attendance?schema=public
+      - APP_TIMEZONE=Asia/Kolkata
+      - NEXT_PUBLIC_APP_NAME=Secureye Attendance Hub
+      - DEVICE_CONNECTOR_ENABLED=true
+      - SECUREYE_DEBUG=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # PostgreSQL Database Service
+  postgres:
+    image: postgres:16-alpine
+    container_name: secureye-attendance-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secureye_secret
+      POSTGRES_DB: secureye_attendance
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

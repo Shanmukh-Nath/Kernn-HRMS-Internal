@@ -1,0 +1,45 @@
+{
+  "name": "secureye-attendance",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production-oriented Secureye S-FB3K Biometric Attendance Integration Platform",
+  "scripts": {
+    "dev": "next dev -H 0.0.0.0 -p 3000",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "vitest run",
+    "sniffer": "tsx scripts/multi-port-sniffer.ts",
+    "simulator": "tsx scripts/simulator.ts",
+    "connector": "tsx scripts/connector-agent.ts",
+    "device:test": "tsx scripts/test-device.ts",
+    "device:discover": "tsx scripts/discover-devices.ts",
+    "db:migrate": "tsx scripts/migrate-sqlite-to-mongo.ts",
+    "db:seed": "tsx scripts/seed-mongo.ts",
+    "admin:create": "tsx scripts/create-admin.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.4.1",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^1.16.0",
+    "mongodb": "^7.6.0",
+    "next": "^15.1.7",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sqlite3": "^6.0.1",
+    "tailwind-merge": "^3.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.5",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.5.3",
+    "prisma": "^6.4.1",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.7"
+  }
+}

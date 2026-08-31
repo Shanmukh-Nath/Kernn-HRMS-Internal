@@ -1,0 +1,20 @@
+{
+  "name": "Standard Corporate Shift",
+  "shiftStartTime": "10:00",
+  "shiftEndTime": "18:00",
+  "gracePeriodMinutes": 15,
+  "lateMarkThresholdMinutes": 45,
+  "earlyExitThresholdMinutes": 30,
+  "halfDayMinHours": 4,
+  "fullDayMinHours": 7.5,
+  "debounceMinutes": 3,
+  "overtimeMinMinutes": 30,
+  "workingDays": [
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday"
+  ]
+}
