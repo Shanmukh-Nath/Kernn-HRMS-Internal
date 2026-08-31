@@ -5,13 +5,14 @@ let config = {
   ip: '192.168.29.83',
   port: 5005,
   machineId: 1,
-  cloudUrl: 'http://localhost:3000',
+  cloudUrl: 'https://kernn-hrms-internal.vercel.app',
   sessionUser: null,
   sessionToken: null,
 };
 
 let cachedPunches = [];
 let groupedDates = {};
+let selectedPullMode = 'ALL';
 let cachedAuditLogs = [
   { timestamp: '2026-08-31 15:38:48', adminId: '6', adminName: 'shanmukh nath', action: 'Entered Settings Menu', target: 'Device Global' },
   { timestamp: '2026-08-28 14:17:20', adminId: '6', adminName: 'shanmukh nath', action: 'Enrolled Face Recognition Profile', target: 'User 3 (test)' },
@@ -51,44 +52,41 @@ function termLog(type, msg) {
 // Render Attendance Table
 function renderPunchesTable(punches) {
   const tbody = document.getElementById('punchesTbody');
-  if (!tbody) return;
-  tbody.innerHTML = '';
+  const fullTbody = document.getElementById('punchesFullTbody');
 
-  if (punches.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 32px;">No attendance punches in memory for this filter.</td></tr>';
-    return;
-  }
+  const rowsHtml = punches.length === 0
+    ? '<tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 32px;">No attendance punches in memory for this filter.</td></tr>'
+    : punches.slice(-80).reverse().map((p, idx) => `
+      <tr>
+        <td style="font-family: monospace; color: var(--text-dim);">${idx + 1}</td>
+        <td><span style="font-family: monospace; font-weight: 700; color: #38bdf8;">${p.userId}</span></td>
+        <td><strong style="color: #fff;">${p.name || 'Staff ' + p.userId}</strong></td>
+        <td><span style="font-family: monospace; color: #34d399; font-weight: 700;">${p.timestamp}</span></td>
+        <td><span style="display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.25);">${p.verifyType || 'Fingerprint Sensor'}</span></td>
+      </tr>
+    `).join('');
 
-  punches.slice(-80).reverse().forEach((p, idx) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td style="font-family: monospace; color: var(--text-dim);">${idx + 1}</td>
-      <td><span style="font-family: monospace; font-weight: 700; color: #38bdf8;">${p.userId}</span></td>
-      <td><strong style="color: #fff;">${p.name || 'Staff ' + p.userId}</strong></td>
-      <td><span style="font-family: monospace; color: #34d399; font-weight: 700;">${p.timestamp}</span></td>
-      <td><span style="display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.25);">${p.verifyType || 'Fingerprint Sensor'}</span></td>
-    `;
-    tbody.appendChild(tr);
-  });
+  if (tbody) tbody.innerHTML = rowsHtml;
+  if (fullTbody) fullTbody.innerHTML = rowsHtml;
 }
 
 // Render Audit Logs Table
 function renderAuditTable() {
-  const tbody = document.getElementById('auditTbody');
-  if (!tbody) return;
-  tbody.innerHTML = '';
+  const deckTbody = document.getElementById('deckAuditTbody');
+  const fullAuditTbody = document.getElementById('auditTbody');
 
-  cachedAuditLogs.forEach((log) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
+  const rowsHtml = cachedAuditLogs.map((log) => `
+    <tr>
       <td style="font-family: monospace; color: #34d399;">${log.timestamp}</td>
       <td><span style="font-family: monospace; color: #f59e0b; font-weight: 700;">${log.adminId}</span></td>
       <td><strong style="color: #fff;">${log.adminName}</strong></td>
       <td><span style="color: #e11d48; font-weight: 600;">${log.action}</span></td>
       <td><span style="font-family: monospace; font-size: 11px; color: var(--text-dim);">${log.target}</span></td>
-    `;
-    tbody.appendChild(tr);
-  });
+    </tr>
+  `).join('');
+
+  if (deckTbody) deckTbody.innerHTML = rowsHtml;
+  if (fullAuditTbody) fullAuditTbody.innerHTML = rowsHtml;
 }
 
 // Update Gap Analysis Badges
@@ -101,14 +99,10 @@ function updateGapAnalysis(punches) {
   });
 
   const distinctDates = Object.keys(groupedDates).sort();
-  const banner = document.getElementById('gapBanner');
   const pillsContainer = document.getElementById('gapDatePills');
-  const statsBadge = document.getElementById('gapStatsBadge');
   const cardDaysCount = document.getElementById('cardDaysCount');
 
-  if (distinctDates.length > 0) {
-    banner.style.display = 'flex';
-    statsBadge.innerText = `${distinctDates.length} Dates Recovered (${distinctDates[0]} to ${distinctDates[distinctDates.length - 1]})`;
+  if (distinctDates.length > 0 && pillsContainer) {
     cardDaysCount.innerText = `${distinctDates.length} Days`;
     pillsContainer.innerHTML = '';
 
@@ -140,10 +134,32 @@ function updateGapAnalysis(punches) {
 }
 
 // ============================================================================
+// DRAWER CONTROLS & DATE MODE SELECTOR
+// ============================================================================
+window.selectPullMode = function(mode) {
+  selectedPullMode = mode;
+  document.getElementById('optAllDates').classList.toggle('selected', mode === 'ALL');
+  document.getElementById('optToday').classList.toggle('selected', mode === 'TODAY');
+  document.getElementById('optCustomRange').classList.toggle('selected', mode === 'CUSTOM');
+
+  const customRow = document.getElementById('customDateRangeRow');
+  if (customRow) {
+    customRow.style.display = mode === 'CUSTOM' ? 'flex' : 'none';
+  }
+};
+
+window.closePullDrawer = function() {
+  const drawer = document.getElementById('pullDrawer');
+  if (drawer) drawer.style.display = 'none';
+};
+
+// ============================================================================
 // STEP 1: PULL FROM HARDWARE (FETCH & PREVIEW ONLY - NO AUTO SYNC)
 // ============================================================================
 async function executePullFromHardware() {
-  const pullBtn = document.getElementById('btnPullHardware');
+  closePullDrawer();
+
+  const pullBtn = document.getElementById('btnTogglePullDrawer');
   const pullIcon = document.getElementById('pullIcon');
   const pullBtnText = document.getElementById('pullBtnText');
   const pushBtn = document.getElementById('btnPushCloud');
@@ -153,7 +169,7 @@ async function executePullFromHardware() {
   pullIcon.classList.add('syncing-spinner');
   pullBtnText.innerText = 'Connecting & Pulling...';
 
-  termLog('SOCKET', `Initiating Native TCP Socket Pull from ${config.ip}:${config.port}...`);
+  termLog('SOCKET', `Initiating Native TCP Socket Pull from ${config.ip}:${config.port} (Mode: ${selectedPullMode})...`);
 
   const puller = new DevicePuller({
     ip: config.ip,
@@ -166,16 +182,30 @@ async function executePullFromHardware() {
     const pullRes = await puller.pullAttendanceLogs(10000);
 
     if (pullRes.success) {
-      cachedPunches = pullRes.logs || [];
+      let logs = pullRes.logs || [];
+
+      // Filter logs based on chosen pull mode
+      if (selectedPullMode === 'TODAY') {
+        const todayStr = new Date().toISOString().substring(0, 10);
+        logs = logs.filter((p) => p.timestamp.startsWith(todayStr));
+      } else if (selectedPullMode === 'CUSTOM') {
+        const start = document.getElementById('drawerStartDate').value;
+        const end = document.getElementById('drawerEndDate').value;
+        if (start) logs = logs.filter((p) => p.timestamp.substring(0, 10) >= start);
+        if (end) logs = logs.filter((p) => p.timestamp.substring(0, 10) <= end);
+      }
+
+      cachedPunches = logs;
       document.getElementById('cardPunchCount').innerText = `${cachedPunches.length} Punches`;
       document.getElementById('badgePunches').innerText = String(cachedPunches.length);
+      document.getElementById('deckBadgePunches').innerText = String(cachedPunches.length);
       
       // Update Preview Table & Gap Analysis
       renderPunchesTable(cachedPunches);
       updateGapAnalysis(cachedPunches);
 
       termLog('SUCCESS', `Native TCP Pull complete! Retrieved ${cachedPunches.length} punches from device EEPROM.`);
-      termLog('INFO', `Data is ready for inspection. Click "Step 2: Push to Cloud Server" to synchronize.`);
+      termLog('INFO', `Data is ready for inspection. Review tabs below and click "Push to Cloud Server" to commit.`);
 
       // Enable Step 2 Push Button
       pushBtn.disabled = false;
@@ -253,24 +283,91 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Detect Platform
   const isMac = process.platform === 'darwin' || navigator.userAgent.includes('Mac');
-  document.getElementById('platformLabel').innerText = isMac ? 'macOS (Apple Silicon & Intel)' : 'Windows Native';
+  document.getElementById('platformLabel').innerText = isMac ? 'macOS Universal (Apple Silicon & Intel)' : 'Windows Native';
+
+  // Check for Saved Local Passkey
+  const savedPasskey = localStorage.getItem('kernn_desktop_passkey');
+  if (savedPasskey) {
+    try {
+      const parsed = JSON.parse(savedPasskey);
+      if (parsed.user && parsed.token) {
+        document.getElementById('passkeySection').style.display = 'block';
+        document.getElementById('btnPasskeyLogin').addEventListener('click', () => {
+          loginWithSession(parsed.user, parsed.serverUrl || config.cloudUrl);
+        });
+      }
+    } catch {}
+  }
+
+  // Cloud URL Dropdown change
+  const serverSelect = document.getElementById('loginServerSelect');
+  const serverCustom = document.getElementById('loginServerCustomUrl');
+
+  serverSelect.addEventListener('change', () => {
+    if (serverSelect.value === 'custom') {
+      serverCustom.style.display = 'block';
+      serverCustom.focus();
+    } else {
+      serverCustom.style.display = 'none';
+      config.cloudUrl = serverSelect.value;
+      document.getElementById('cfgCloudUrl').value = serverSelect.value;
+      document.getElementById('cloudTargetLabel').innerText = serverSelect.value;
+    }
+  });
+
+  // Password Show / Hide Toggle
+  const togglePassBtn = document.getElementById('btnTogglePassword');
+  const passInput = document.getElementById('loginPassword');
+  const eyeIcon = document.getElementById('eyeIcon');
+
+  togglePassBtn.addEventListener('click', () => {
+    if (passInput.type === 'password') {
+      passInput.type = 'text';
+      eyeIcon.setAttribute('data-lucide', 'eye-off');
+    } else {
+      passInput.type = 'password';
+      eyeIcon.setAttribute('data-lucide', 'eye');
+    }
+    refreshIcons();
+  });
+
+  function loginWithSession(user, serverUrl) {
+    config.sessionUser = user;
+    config.cloudUrl = serverUrl;
+    document.getElementById('sidebarUserName').innerText = user.name;
+    document.getElementById('sidebarUserRole').innerText = user.role.replace('_', ' ');
+    document.getElementById('sidebarAvatar').innerText = user.name[0] || 'A';
+    document.getElementById('cloudTargetLabel').innerText = serverUrl;
+    document.getElementById('cfgCloudUrl').value = serverUrl;
+
+    document.getElementById('authView').style.display = 'none';
+    document.getElementById('dashboardView').style.display = 'flex';
+    refreshIcons();
+
+    termLog('SUCCESS', `Authenticated via Passkey as ${user.name} (${user.role}).`);
+    termLog('INFO', `Hardware ready at ${config.ip}:${config.port}. Click "Pull From Hardware" to start.`);
+  }
 
   // ==========================================================================
   // AUTHENTICATION FORM HANDLER
   // ==========================================================================
   const loginForm = document.getElementById('loginForm');
-  const authView = document.getElementById('authView');
-  const dashboardView = document.getElementById('dashboardView');
   const authErrorBanner = document.getElementById('authErrorBanner');
 
   loginForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     authErrorBanner.style.display = 'none';
 
-    const serverUrl = document.getElementById('loginServerUrl').value.trim().replace(/\/$/, '');
+    let serverUrl = serverSelect.value === 'custom'
+      ? serverCustom.value.trim().replace(/\/$/, '')
+      : serverSelect.value;
+
+    if (!serverUrl) serverUrl = 'https://kernn-hrms-internal.vercel.app';
+
     const mobile = document.getElementById('loginMobile').value.trim();
-    const pass = document.getElementById('loginPassword').value;
+    const pass = passInput.value;
     const btnLogin = document.getElementById('btnLogin');
+    const rememberPasskey = document.getElementById('chkSavePasskey').checked;
 
     btnLogin.disabled = true;
     btnLogin.innerText = 'Authenticating...';
@@ -300,18 +397,16 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
 
-        config.sessionUser = user;
-        document.getElementById('sidebarUserName').innerText = user.name;
-        document.getElementById('sidebarUserRole').innerText = user.role.replace('_', ' ');
-        document.getElementById('sidebarAvatar').innerText = user.name[0] || 'A';
+        // Save Passkey if checked
+        if (rememberPasskey) {
+          localStorage.setItem('kernn_desktop_passkey', JSON.stringify({
+            user,
+            serverUrl,
+            savedAt: new Date().toISOString(),
+          }));
+        }
 
-        // Switch to Dashboard
-        authView.style.display = 'none';
-        dashboardView.style.display = 'flex';
-        refreshIcons();
-
-        termLog('SUCCESS', `Authenticated as ${user.name} (${user.role}).`);
-        termLog('INFO', `Hardware ready at ${config.ip}:${config.port}. Click "Step 1: Pull From Hardware" to start.`);
+        loginWithSession(user, serverUrl);
       } else {
         authErrorBanner.innerText = data.error?.message || 'Invalid credentials.';
         authErrorBanner.style.display = 'block';
@@ -329,10 +424,33 @@ document.addEventListener('DOMContentLoaded', () => {
   // Logout Handler
   document.getElementById('btnLogout').addEventListener('click', () => {
     config.sessionUser = null;
-    dashboardView.style.display = 'none';
-    authView.style.display = 'flex';
-    document.getElementById('loginPassword').value = '';
+    document.getElementById('dashboardView').style.display = 'none';
+    document.getElementById('authView').style.display = 'flex';
+    passInput.value = '';
     refreshIcons();
+  });
+
+  // Toggle Pull Drawer
+  document.getElementById('btnTogglePullDrawer').addEventListener('click', () => {
+    const drawer = document.getElementById('pullDrawer');
+    drawer.style.display = drawer.style.display === 'none' ? 'block' : 'none';
+    refreshIcons();
+  });
+
+  // Execute Pull inside drawer
+  document.getElementById('btnExecutePull').addEventListener('click', executePullFromHardware);
+
+  // Deck Tabs Switching (Attendance Logs, Enrolled Staff, Management Audit, Telemetry)
+  document.querySelectorAll('.deck-tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.deck-tab').forEach((t) => t.classList.remove('active'));
+      document.querySelectorAll('.deck-content-pane').forEach((p) => p.classList.remove('active'));
+
+      tab.classList.add('active');
+      const targetPane = document.getElementById(tab.getAttribute('data-deck'));
+      if (targetPane) targetPane.classList.add('active');
+      refreshIcons();
+    });
   });
 
   // Navigation Tab Switching
@@ -348,9 +466,6 @@ document.addEventListener('DOMContentLoaded', () => {
       refreshIcons();
     });
   });
-
-  // Step 1: Pull From Hardware Button Click
-  document.getElementById('btnPullHardware').addEventListener('click', executePullFromHardware);
 
   // Step 2: Push to Cloud Button Click
   document.getElementById('btnPushCloud').addEventListener('click', executePushToCloud);

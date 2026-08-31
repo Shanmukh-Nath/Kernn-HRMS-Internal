@@ -24,7 +24,7 @@
   </header>
 
   <!-- ========================================================================= -->
-  <!-- 1. AUTHENTICATION VIEW (GATED LOGIN FOR ADMIN/MANAGER)                    -->
+  <!-- 1. AUTHENTICATION VIEW (GATED LOGIN WITH PASSKEY & CLOUD URL DROPDOWN)    -->
   <!-- ========================================================================= -->
   <div class="auth-container" id="authView">
     <div class="auth-card">
@@ -32,16 +32,39 @@
         <i data-lucide="shield-check" style="width: 28px; height: 28px;"></i>
       </div>
       <h1 class="auth-title">Manager Authentication</h1>
-      <p class="auth-subtitle">Sign in with your HRMS Administrator credentials to access the biometric hardware bridge.</p>
+      <p class="auth-subtitle">Sign in to unlock the hardware gateway. Passkeys and cloud credentials supported.</p>
 
       <div class="auth-error-banner" id="authErrorBanner">
         Invalid credentials or unauthorized role.
       </div>
 
+      <!-- Quick Passkey Biometric Login Button (if saved on device) -->
+      <div id="passkeySection" style="display: none;">
+        <button type="button" class="passkey-quick-btn" id="btnPasskeyLogin">
+          <i data-lucide="fingerprint" style="width: 16px; height: 16px;"></i>
+          <span>Quick Unlock with Device Passkey</span>
+        </button>
+        <div style="text-align: center; margin: 10px 0; font-size: 11px; color: var(--text-dim);">
+          <span>or sign in with password</span>
+        </div>
+      </div>
+
       <form class="auth-form" id="loginForm">
+        <!-- Cloud Server Preset Dropdown -->
         <div class="input-field">
-          <label>Cloud Server URL</label>
-          <input type="text" id="loginServerUrl" value="http://localhost:3000" placeholder="https://your-hrms.vercel.app">
+          <label>Cloud Server Target</label>
+          <select id="loginServerSelect">
+            <option value="https://kernn-hrms-internal.vercel.app" selected>Kernn HRMS Suite Cloud (Production)</option>
+            <option value="https://hrms.kernn.ai">https://hrms.kernn.ai (Dedicated Endpoint)</option>
+            <option value="http://localhost:3000">http://localhost:3000 (Local Development)</option>
+            <option value="custom">Other / Custom Server URL...</option>
+          </select>
+          <input
+            type="text"
+            id="loginServerCustomUrl"
+            style="display: none; margin-top: 6px;"
+            placeholder="https://your-custom-hrms.com"
+          />
         </div>
 
         <div class="input-field">
@@ -51,10 +74,34 @@
 
         <div class="input-field">
           <label>Admin Password</label>
-          <input type="password" id="loginPassword" placeholder="••••••••" value="Admin@123" required>
+          <div style="position: relative; display: flex; align-items: center;">
+            <input
+              type="password"
+              id="loginPassword"
+              placeholder="••••••••"
+              value="Admin@123"
+              required
+              style="width: 100%; padding-right: 36px;"
+            >
+            <button
+              type="button"
+              id="btnTogglePassword"
+              style="position: absolute; right: 10px; background: none; border: none; color: var(--text-dim); cursor: pointer; display: flex; align-items: center;"
+              title="Show / Hide Password"
+            >
+              <i data-lucide="eye" id="eyeIcon" style="width: 16px; height: 16px;"></i>
+            </button>
+          </div>
         </div>
 
-        <button type="submit" class="btn-primary" id="btnLogin" style="margin-top: 10px; width: 100%; padding: 12px; font-size: 13px;">
+        <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
+          <input type="checkbox" id="chkSavePasskey" checked style="accent-color: var(--primary); cursor: pointer;">
+          <label for="chkSavePasskey" style="font-size: 11px; color: var(--text-muted); cursor: pointer;">
+            Remember passkey on this device for 1-click logins
+          </label>
+        </div>
+
+        <button type="submit" class="btn-primary" id="btnLogin" style="margin-top: 8px; width: 100%; padding: 12px; font-size: 13px;">
           <i data-lucide="lock" style="width: 14px; height: 14px; margin-right: 6px;"></i>
           Sign In to Gateway
         </button>
@@ -91,6 +138,11 @@
           <span>Attendance Punches</span>
           <span class="nav-badge" id="badgePunches">0</span>
         </div>
+        <div class="nav-item" data-tab="tab-users">
+          <i data-lucide="users" style="width: 16px; height: 16px;"></i>
+          <span>Enrolled Staff</span>
+          <span class="nav-badge" id="badgeUsers">6</span>
+        </div>
         <div class="nav-item" data-tab="tab-audit">
           <i data-lucide="shield-check" style="width: 16px; height: 16px;"></i>
           <span>Hardware Audit</span>
@@ -120,25 +172,6 @@
       <!-- TAB 1: LIVE SYNC HUB -->
       <section id="tab-sync" class="tab-pane active">
         
-        <!-- Intelligent Missing Dates Gap Analysis Banner -->
-        <div class="gap-analysis-banner" id="gapBanner" style="display: none;">
-          <div style="width: 36px; height: 36px; border-radius: 10px; background: rgba(6, 182, 212, 0.2); display: flex; align-items: center; justify-content: center; color: #38bdf8; shrink: 0;">
-            <i data-lucide="history" style="width: 20px; height: 20px;"></i>
-          </div>
-          <div style="flex: 1;">
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <h3 style="font-size: 13px; font-weight: 800; color: #fff;">Intelligent Date Gap Recovery</h3>
-              <span style="font-size: 10px; font-weight: 700; color: #38bdf8; background: rgba(6, 182, 212, 0.15); padding: 2px 8px; border-radius: 10px;" id="gapStatsBadge">7 Missing Dates Found</span>
-            </div>
-            <p style="font-size: 11px; color: var(--text-muted); margin-top: 2px;" id="gapDescText">
-              Device records retrieved across all missing calendar dates while offline. Click any date below to inspect:
-            </p>
-            <div class="gap-date-pills" id="gapDatePills">
-              <!-- Dynamically populated date badges -->
-            </div>
-          </div>
-        </div>
-
         <!-- Two-Step Pull & Push Action Hero Grid -->
         <div class="action-hero-grid">
           <!-- Step 1: PULL FROM HARDWARE -->
@@ -148,9 +181,9 @@
             </div>
             <h3 style="font-size: 15px; font-weight: 800; color: #fff; margin-bottom: 6px;">Pull Records from Device</h3>
             <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">
-              Connects over TCP to 192.168.29.83:5005, dumps all accumulated punch EEPROM memory, and recovers missing dates.
+              Connects over TCP to 192.168.29.83:5005, dumps all punch EEPROM memory, and recovers missing dates.
             </p>
-            <button class="btn-action-step btn-pull" id="btnPullHardware">
+            <button class="btn-action-step btn-pull" id="btnTogglePullDrawer">
               <i data-lucide="download" id="pullIcon" style="width: 16px; height: 16px;"></i>
               <span id="pullBtnText">Pull From Hardware</span>
             </button>
@@ -163,7 +196,7 @@
             </div>
             <h3 style="font-size: 15px; font-weight: 800; color: #fff; margin-bottom: 6px;">Sync & Commit to Cloud</h3>
             <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">
-              Sends inspected attendance logs to your cloud server (<span id="cloudTargetLabel" style="color: #38bdf8;">http://localhost:3000</span>) for processing.
+              Sends inspected attendance logs to your cloud server (<span id="cloudTargetLabel" style="color: #38bdf8;">https://kernn-hrms-internal.vercel.app</span>) for processing.
             </p>
             <button class="btn-action-step btn-sync-cloud" id="btnPushCloud" disabled>
               <i data-lucide="cloud-upload" id="syncIcon" style="width: 16px; height: 16px;"></i>
@@ -172,7 +205,56 @@
           </div>
         </div>
 
-        <!-- 4 Quick Stats -->
+        <!-- SLIDE-DOWN DRAWER: DATE RECOVERY & FILTER SELECTOR -->
+        <div class="pull-drawer" id="pullDrawer" style="display: none;">
+          <div class="drawer-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <i data-lucide="history" style="width: 18px; height: 18px; color: #38bdf8;"></i>
+              <h4 style="font-size: 13px; font-weight: 800; color: #fff;">Hardware Date Recovery Options</h4>
+            </div>
+            <span style="font-size: 11px; color: var(--text-muted);">Choose which calendar dates to extract</span>
+          </div>
+
+          <div class="date-mode-selector">
+            <div class="mode-option selected" id="optAllDates" onclick="selectPullMode('ALL')">
+              <i data-lucide="layers" style="width: 14px; height: 14px;"></i>
+              <span>All Missed Dates (Auto-Gap Recovery)</span>
+            </div>
+            <div class="mode-option" id="optToday" onclick="selectPullMode('TODAY')">
+              <i data-lucide="calendar" style="width: 14px; height: 14px;"></i>
+              <span>Today Only</span>
+            </div>
+            <div class="mode-option" id="optCustomRange" onclick="selectPullMode('CUSTOM')">
+              <i data-lucide="sliders" style="width: 14px; height: 14px;"></i>
+              <span>Specific Date Range</span>
+            </div>
+          </div>
+
+          <!-- Custom Date Range Pickers (hidden by default) -->
+          <div id="customDateRangeRow" style="display: none; margin-bottom: 14px; gap: 10px; display: flex;">
+            <div class="input-field" style="flex: 1;">
+              <label>Start Date</label>
+              <input type="date" id="drawerStartDate">
+            </div>
+            <div class="input-field" style="flex: 1;">
+              <label>End Date</label>
+              <input type="date" id="drawerEndDate">
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border-subtle); padding-top: 12px; margin-top: 12px;">
+            <button class="btn-primary" style="background: transparent; border: 1px solid var(--border-subtle); color: var(--text-muted);" onclick="closePullDrawer()">
+              Cancel
+            </button>
+
+            <button class="btn-primary" id="btnExecutePull" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);">
+              <i data-lucide="download" style="width: 14px; height: 14px; margin-right: 6px;"></i>
+              <span>Execute Socket Pull</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 4 Quick Stats Cards -->
         <div class="stats-grid">
           <div class="stat-card">
             <div class="stat-label">Terminal Device</div>
@@ -196,6 +278,171 @@
           </div>
         </div>
 
+        <!-- MULTI-TAB HARDWARE INSPECTION DECK -->
+        <div class="deck-card">
+          <div class="deck-tabs-header">
+            <div class="deck-tabs">
+              <div class="deck-tab active" data-deck="deck-punches">
+                <i data-lucide="clipboard-list" style="width: 14px; height: 14px;"></i>
+                <span>Attendance Logs</span>
+                <span class="deck-tab-badge" id="deckBadgePunches">0</span>
+              </div>
+              <div class="deck-tab" data-deck="deck-users">
+                <i data-lucide="users" style="width: 14px; height: 14px;"></i>
+                <span>Enrolled Profiles</span>
+                <span class="deck-tab-badge" id="deckBadgeUsers">6</span>
+              </div>
+              <div class="deck-tab" data-deck="deck-audit">
+                <i data-lucide="shield-check" style="width: 14px; height: 14px;"></i>
+                <span>Management Audit</span>
+                <span class="deck-tab-badge">6</span>
+              </div>
+              <div class="deck-tab" data-deck="deck-hardware">
+                <i data-lucide="cpu" style="width: 14px; height: 14px;"></i>
+                <span>Hardware Telemetry</span>
+              </div>
+            </div>
+
+            <!-- Date Badges Filter Bar -->
+            <div class="gap-date-pills" id="gapDatePills" style="margin-top: 0;"></div>
+          </div>
+
+          <!-- Deck Pane 1: Attendance Logs Table -->
+          <div class="deck-content-pane active" id="deck-punches">
+            <div class="data-table-container">
+              <table class="custom-table" id="tablePunches">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>User ID</th>
+                    <th>Staff Name</th>
+                    <th>Punch Timestamp</th>
+                    <th>Verification Mode</th>
+                  </tr>
+                </thead>
+                <tbody id="punchesTbody">
+                  <tr>
+                    <td colspan="5" style="text-align: center; color: var(--text-dim); padding: 32px;">
+                      Click <strong>"Pull From Hardware"</strong> to retrieve and preview records.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Deck Pane 2: Enrolled Profiles Table -->
+          <div class="deck-content-pane" id="deck-users">
+            <div class="data-table-container">
+              <table class="custom-table">
+                <thead>
+                  <tr>
+                    <th>Device ID</th>
+                    <th>Staff Name</th>
+                    <th>Privilege Level</th>
+                    <th>Biometric Fingerprints</th>
+                    <th>Face Profile</th>
+                    <th>Card Number</th>
+                  </tr>
+                </thead>
+                <tbody id="deckUsersTbody">
+                  <tr>
+                    <td><strong style="color: #38bdf8;">1</strong></td>
+                    <td><strong style="color: #fff;">hemanth</strong></td>
+                    <td><span style="color: #34d399; font-weight: 700;">Super Administrator</span></td>
+                    <td>1 Enrolled</td>
+                    <td><span style="color: #34d399;">Enrolled</span></td>
+                    <td>10001</td>
+                  </tr>
+                  <tr>
+                    <td><strong style="color: #38bdf8;">2</strong></td>
+                    <td><strong style="color: #fff;">karthik</strong></td>
+                    <td><span style="color: #38bdf8; font-weight: 700;">Manager</span></td>
+                    <td>2 Enrolled</td>
+                    <td><span style="color: #34d399;">Enrolled</span></td>
+                    <td>10002</td>
+                  </tr>
+                  <tr>
+                    <td><strong style="color: #38bdf8;">3</strong></td>
+                    <td><strong style="color: #fff;">test</strong></td>
+                    <td><span style="color: var(--text-dim);">Standard User</span></td>
+                    <td>1 Enrolled</td>
+                    <td><span style="color: #34d399;">Enrolled</span></td>
+                    <td>10003</td>
+                  </tr>
+                  <tr>
+                    <td><strong style="color: #38bdf8;">4</strong></td>
+                    <td><strong style="color: #fff;">krishna</strong></td>
+                    <td><span style="color: var(--text-dim);">Standard User</span></td>
+                    <td>1 Enrolled</td>
+                    <td><span style="color: var(--text-dim);">Not Enrolled</span></td>
+                    <td>10004</td>
+                  </tr>
+                  <tr>
+                    <td><strong style="color: #38bdf8;">5</strong></td>
+                    <td><strong style="color: #fff;">satish</strong></td>
+                    <td><span style="color: var(--text-dim);">Standard User</span></td>
+                    <td>1 Enrolled</td>
+                    <td><span style="color: var(--text-dim);">Not Enrolled</span></td>
+                    <td>10005</td>
+                  </tr>
+                  <tr>
+                    <td><strong style="color: #38bdf8;">6</strong></td>
+                    <td><strong style="color: #fff;">shanmukh nath</strong></td>
+                    <td><span style="color: #34d399; font-weight: 700;">Super Administrator</span></td>
+                    <td>2 Enrolled</td>
+                    <td><span style="color: #34d399;">Enrolled</span></td>
+                    <td>10006</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Deck Pane 3: Management Audit Table -->
+          <div class="deck-content-pane" id="deck-audit">
+            <div class="data-table-container">
+              <table class="custom-table">
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>Admin ID</th>
+                    <th>Admin Name</th>
+                    <th>Action Event</th>
+                    <th>Affected Target</th>
+                  </tr>
+                </thead>
+                <tbody id="deckAuditTbody">
+                  <!-- Dynamically populated -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Deck Pane 4: Hardware Telemetry -->
+          <div class="deck-content-pane" id="deck-hardware" style="padding: 20px;">
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; font-size: 12px;">
+              <div style="background: rgba(255,255,255,0.02); padding: 14px; border-radius: 12px; border: 1px solid var(--border-subtle);">
+                <div style="font-size: 10px; font-weight: 800; color: var(--text-dim); text-transform: uppercase;">Terminal Model</div>
+                <div style="font-size: 14px; font-weight: 800; color: #fff; margin-top: 4px;">Secureye S-FB3K</div>
+                <div style="font-size: 11px; color: #38bdf8; margin-top: 2px;">OEM: Realand SBXPC</div>
+              </div>
+
+              <div style="background: rgba(255,255,255,0.02); padding: 14px; border-radius: 12px; border: 1px solid var(--border-subtle);">
+                <div style="font-size: 10px; font-weight: 800; color: var(--text-dim); text-transform: uppercase;">Firmware Version</div>
+                <div style="font-size: 14px; font-weight: 800; color: #34d399; margin-top: 4px;">SBXPC v4.8.21</div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Flash EEPROM: 16MB</div>
+              </div>
+
+              <div style="background: rgba(255,255,255,0.02); padding: 14px; border-radius: 12px; border: 1px solid var(--border-subtle);">
+                <div style="font-size: 10px; font-weight: 800; color: var(--text-dim); text-transform: uppercase;">EEPROM Log Capacity</div>
+                <div style="font-size: 14px; font-weight: 800; color: #fbbf24; margin-top: 4px;">100,000 Punches</div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Used: ~0.1% (Healthy)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Live Terminal Stream -->
         <div class="terminal-window">
           <div class="terminal-header">
@@ -215,11 +462,11 @@
 
       <!-- TAB 2: ATTENDANCE PUNCHES PREVIEW -->
       <section id="tab-punches" class="tab-pane">
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">
+        <div class="deck-card">
+          <div class="deck-tabs-header" style="padding: 12px 16px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
               <i data-lucide="clipboard-list" style="color: #34d399;"></i>
-              <span>Inspected Hardware Attendance Memory</span>
+              <span style="font-size: 13px; font-weight: 800; color: #fff;">Inspected Attendance Punches</span>
             </div>
             <div style="display: flex; gap: 8px;">
               <input type="date" id="punchDateFilter" style="background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 4px 8px; font-size: 11px; color: #fff;">
@@ -227,8 +474,8 @@
             </div>
           </div>
 
-          <div class="data-table-container">
-            <table class="custom-table" id="tablePunches">
+          <div class="data-table-container" style="max-height: 500px;">
+            <table class="custom-table" id="tablePunchesFull">
               <thead>
                 <tr>
                   <th>#</th>
@@ -238,10 +485,10 @@
                   <th>Verification Mode</th>
                 </tr>
               </thead>
-              <tbody id="punchesTbody">
+              <tbody id="punchesFullTbody">
                 <tr>
                   <td colspan="5" style="text-align: center; color: var(--text-dim); padding: 32px;">
-                    Click <strong>"Step 1: Pull From Hardware"</strong> to retrieve and preview records.
+                    Click <strong>"Pull From Hardware"</strong> to retrieve records.
                   </td>
                 </tr>
               </tbody>
@@ -250,18 +497,95 @@
         </div>
       </section>
 
-      <!-- TAB 3: HARDWARE AUDIT LOGS -->
+      <!-- TAB 3: ENROLLED STAFF -->
+      <section id="tab-users" class="tab-pane">
+        <div class="deck-card">
+          <div class="deck-tabs-header" style="padding: 12px 16px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <i data-lucide="users" style="color: #38bdf8;"></i>
+              <span style="font-size: 13px; font-weight: 800; color: #fff;">Terminal Enrolled Users & Biometric Profiles</span>
+            </div>
+          </div>
+
+          <div class="data-table-container" style="max-height: 500px;">
+            <table class="custom-table">
+              <thead>
+                <tr>
+                  <th>Device ID</th>
+                  <th>Staff Name</th>
+                  <th>Privilege Level</th>
+                  <th>Biometric Fingerprints</th>
+                  <th>Face Profile</th>
+                  <th>Card Number</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong style="color: #38bdf8;">1</strong></td>
+                  <td><strong style="color: #fff;">hemanth</strong></td>
+                  <td><span style="color: #34d399; font-weight: 700;">Super Administrator</span></td>
+                  <td>1 Enrolled</td>
+                  <td><span style="color: #34d399;">Enrolled</span></td>
+                  <td>10001</td>
+                </tr>
+                <tr>
+                  <td><strong style="color: #38bdf8;">2</strong></td>
+                  <td><strong style="color: #fff;">karthik</strong></td>
+                  <td><span style="color: #38bdf8; font-weight: 700;">Manager</span></td>
+                  <td>2 Enrolled</td>
+                  <td><span style="color: #34d399;">Enrolled</span></td>
+                  <td>10002</td>
+                </tr>
+                <tr>
+                  <td><strong style="color: #38bdf8;">3</strong></td>
+                  <td><strong style="color: #fff;">test</strong></td>
+                  <td><span style="color: var(--text-dim);">Standard User</span></td>
+                  <td>1 Enrolled</td>
+                  <td><span style="color: #34d399;">Enrolled</span></td>
+                  <td>10003</td>
+                </tr>
+                <tr>
+                  <td><strong style="color: #38bdf8;">4</strong></td>
+                  <td><strong style="color: #fff;">krishna</strong></td>
+                  <td><span style="color: var(--text-dim);">Standard User</span></td>
+                  <td>1 Enrolled</td>
+                  <td><span style="color: var(--text-dim);">Not Enrolled</span></td>
+                  <td>10004</td>
+                </tr>
+                <tr>
+                  <td><strong style="color: #38bdf8;">5</strong></td>
+                  <td><strong style="color: #fff;">satish</strong></td>
+                  <td><span style="color: var(--text-dim);">Standard User</span></td>
+                  <td>1 Enrolled</td>
+                  <td><span style="color: var(--text-dim);">Not Enrolled</span></td>
+                  <td>10005</td>
+                </tr>
+                <tr>
+                  <td><strong style="color: #38bdf8;">6</strong></td>
+                  <td><strong style="color: #fff;">shanmukh nath</strong></td>
+                  <td><span style="color: #34d399; font-weight: 700;">Super Administrator</span></td>
+                  <td>2 Enrolled</td>
+                  <td><span style="color: #34d399;">Enrolled</span></td>
+                  <td>10006</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: HARDWARE AUDIT LOGS -->
       <section id="tab-audit" class="tab-pane">
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">
+        <div class="deck-card">
+          <div class="deck-tabs-header" style="padding: 12px 16px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
               <i data-lucide="shield-check" style="color: #e11d48;"></i>
-              <span>Terminal Supervisory & Admin Audit Trail</span>
+              <span style="font-size: 13px; font-weight: 800; color: #fff;">Terminal Supervisory & Admin Audit Trail</span>
             </div>
             <span style="font-size: 11px; color: var(--text-dim);">Records physical menu & setting operations</span>
           </div>
 
-          <div class="data-table-container">
+          <div class="data-table-container" style="max-height: 500px;">
             <table class="custom-table">
               <thead>
                 <tr>
@@ -280,12 +604,9 @@
         </div>
       </section>
 
-      <!-- TAB 4: WI-FI SUBNET SCANNER -->
+      <!-- TAB 5: WI-FI SUBNET SCANNER -->
       <section id="tab-scanner" class="tab-pane">
-        <div class="card" style="text-align: center; padding: 30px;">
-          <div class="radar-screen">
-            <div class="radar-sweep"></div>
-          </div>
+        <div class="deck-card" style="text-align: center; padding: 30px;">
           <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 6px;">Local Wi-Fi Subnet Scanner</h3>
           <p style="font-size: 12px; color: var(--text-muted); max-width: 420px; margin: 0 auto 16px;">
             Probes active IP addresses on your local office network (192.168.29.1 to 192.168.29.254) to identify biometric terminals on port 5005.
@@ -296,9 +617,9 @@
           </button>
         </div>
 
-        <div class="card" id="scanResultsCard" style="display: none;">
-          <div class="card-header">
-            <div class="card-title">Discovered Hardware Devices</div>
+        <div class="deck-card" id="scanResultsCard" style="display: none;">
+          <div class="deck-tabs-header" style="padding: 12px 16px;">
+            <span style="font-size: 13px; font-weight: 800; color: #fff;">Discovered Hardware Devices</span>
           </div>
           <div class="data-table-container">
             <table class="custom-table">
@@ -327,17 +648,17 @@
         </div>
       </section>
 
-      <!-- TAB 5: SETTINGS -->
+      <!-- TAB 6: SETTINGS -->
       <section id="tab-settings" class="tab-pane">
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">
+        <div class="deck-card" style="padding: 20px;">
+          <div class="deck-tabs-header" style="padding: 0 0 14px 0; background: none;">
+            <div style="display: flex; align-items: center; gap: 8px;">
               <i data-lucide="sliders" style="color: #a78bfa;"></i>
-              <span>Hardware & Cloud Gateway Settings</span>
+              <span style="font-size: 13px; font-weight: 800; color: #fff;">Hardware & Cloud Gateway Settings</span>
             </div>
           </div>
 
-          <div class="form-grid">
+          <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-top: 14px;">
             <div class="input-field">
               <label>Terminal LAN IP Address</label>
               <input type="text" id="cfgIp" value="192.168.29.83">
@@ -351,12 +672,8 @@
               <input type="number" id="cfgMachineId" value="1">
             </div>
             <div class="input-field">
-              <label>Cloud Webhook URL (Vercel / Online)</label>
-              <input type="text" id="cfgCloudUrl" value="http://localhost:3000" placeholder="https://your-hrms.vercel.app">
-            </div>
-            <div class="input-field">
-              <label>Device Serial Number</label>
-              <input type="text" id="cfgSn" value="102023050002456" disabled style="opacity: 0.7;">
+              <label>Cloud Webhook URL</label>
+              <input type="text" id="cfgCloudUrl" value="https://kernn-hrms-internal.vercel.app">
             </div>
           </div>
 
