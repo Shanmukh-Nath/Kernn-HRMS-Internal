@@ -12,6 +12,7 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/api/auth/logout') ||
     pathname.startsWith('/api/passkeys/login') ||
     pathname.startsWith('/api/passkeys/check') ||
+    pathname.startsWith('/api/devices/sync/push') ||
     pathname.startsWith('/kernn-') ||
     pathname.endsWith('.png') ||
     pathname.endsWith('.jpg') ||

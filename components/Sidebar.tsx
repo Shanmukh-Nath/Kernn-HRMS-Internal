@@ -66,6 +66,7 @@ export function Sidebar() {
             { name: "Today's Attendance", href: '/daily-attendance', icon: CalendarCheck, highlight: true },
             { name: 'Live Biometrics', href: '/live', icon: Radio, highlight: true },
             { name: 'Raw Punches', href: '/attendance', icon: CalendarCheck },
+            { name: 'Hardware Audit Trail', href: '/devices/audit', icon: ShieldCheck, badge: 'Audit' },
             { name: 'Shift Rules', href: '/settings/rules', icon: Clock },
             { name: 'Devices & LAN', href: '/devices', icon: HardDrive },
             { name: 'Protocol Sniffer', href: '/debug', icon: Bug },

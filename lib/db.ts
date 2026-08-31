@@ -23,64 +23,123 @@ import {
 // ----------------------------------------------------
 
 export async function findUserByMobile(mobileNumber: string) {
-  const users = await usersCol();
-  const roles = await rolesCol();
-  const rolePerms = await rolePermissionsCol();
-  const perms = await permissionsCol();
+  try {
+    const users = await usersCol();
+    const roles = await rolesCol();
+    const rolePerms = await rolePermissionsCol();
+    const perms = await permissionsCol();
 
-  const user = await users.findOne({ mobileNumber });
-  if (!user) return null;
+    const user = await users.findOne({ mobileNumber });
+    if (!user) return null;
 
-  const role = await roles.findOne({ $or: [{ id: user.roleId }, { name: user.roleId }] });
-  const roleName = role ? role.name : user.roleId || 'EMPLOYEE';
-  const roleId = role?.id || user.roleId;
+    const role = await roles.findOne({ $or: [{ id: user.roleId }, { name: user.roleId }] });
+    const roleName = role ? role.name : user.roleId || 'EMPLOYEE';
+    const roleId = role?.id || user.roleId;
 
-  const activeRolePerms = await rolePerms.find({ roleId }).toArray();
-  const permIds = activeRolePerms.map((rp) => rp.permissionId);
-  const foundPerms = await perms.find({ $or: [{ id: { $in: permIds } }, { slug: { $in: permIds } }] }).toArray();
+    const activeRolePerms = await rolePerms.find({ roleId }).toArray();
+    const permIds = activeRolePerms.map((rp) => rp.permissionId);
+    const foundPerms = await perms.find({ $or: [{ id: { $in: permIds } }, { slug: { $in: permIds } }] }).toArray();
 
-  return {
-    ...user,
-    id: user.id || user._id?.toString(),
-    role: roleName,
-    roleName,
-    permissions: foundPerms.map((p) => p.slug || p.id),
-  };
+    return {
+      ...user,
+      id: user.id || user._id?.toString(),
+      role: roleName,
+      roleName,
+      permissions: foundPerms.map((p) => p.slug || p.id),
+    };
+  } catch (mongoErr) {
+    // Fallback to SQLite
+    const { DatabaseSync } = require('node:sqlite');
+    const path = require('path');
+    const db = new DatabaseSync(path.join(process.cwd(), 'prisma', 'dev.db'));
+
+    const user: any = db.prepare('SELECT * FROM User WHERE mobileNumber = ?').get(mobileNumber);
+    if (!user) return null;
+
+    const role: any = db.prepare('SELECT id, name FROM Role WHERE id = ? OR name = ?').get(user.roleId, user.roleId);
+    const roleName = role ? role.name : user.roleId || 'EMPLOYEE';
+
+    const perms: any[] = db.prepare(`
+      SELECT p.slug FROM RolePermission rp
+      JOIN Permission p ON rp.permissionId = p.id OR rp.permissionId = p.slug
+      WHERE rp.roleId = ?
+    `).all(role?.id || user.roleId);
+
+    return {
+      ...user,
+      role: roleName,
+      roleName,
+      permissions: perms.map((p) => p.slug),
+    };
+  }
 }
 
 export async function findUserById(id: string) {
-  const users = await usersCol();
-  const roles = await rolesCol();
-  const employees = await employeesCol();
-  const rolePerms = await rolePermissionsCol();
-  const perms = await permissionsCol();
+  try {
+    const users = await usersCol();
+    const roles = await rolesCol();
+    const employees = await employeesCol();
+    const rolePerms = await rolePermissionsCol();
+    const perms = await permissionsCol();
 
-  const user = await users.findOne({ $or: [{ id }, { _id: id }] });
-  if (!user) return null;
+    const user = await users.findOne({ $or: [{ id }, { _id: id }] });
+    if (!user) return null;
 
-  const role = await roles.findOne({ $or: [{ id: user.roleId }, { name: user.roleId }] });
-  const roleName = role ? role.name : user.roleId || 'EMPLOYEE';
-  const roleId = role?.id || user.roleId;
+    const role = await roles.findOne({ $or: [{ id: user.roleId }, { name: user.roleId }] });
+    const roleName = role ? role.name : user.roleId || 'EMPLOYEE';
+    const roleId = role?.id || user.roleId;
 
-  let employee = null;
-  if (user.employeeId) {
-    employee = await employees.findOne({ id: user.employeeId });
+    let employee = null;
+    if (user.employeeId) {
+      employee = await employees.findOne({ $or: [{ id: user.employeeId }, { _id: user.employeeId }] });
+    }
+
+    const activeRolePerms = await rolePerms.find({ roleId }).toArray();
+    const permIds = activeRolePerms.map((rp) => rp.permissionId);
+    const foundPerms = await perms.find({ $or: [{ id: { $in: permIds } }, { slug: { $in: permIds } }] }).toArray();
+
+    return {
+      ...user,
+      id: user.id || user._id?.toString(),
+      role: roleName,
+      roleName,
+      permissions: foundPerms.map((p) => p.slug || p.id),
+      department: employee?.department || 'General',
+      designation: employee?.designation || roleName,
+    };
+  } catch (mongoErr) {
+    const { DatabaseSync } = require('node:sqlite');
+    const path = require('path');
+    const db = new DatabaseSync(path.join(process.cwd(), 'prisma', 'dev.db'));
+
+    const user: any = db.prepare('SELECT * FROM User WHERE id = ?').get(id);
+    if (!user) return null;
+
+    const role: any = db.prepare('SELECT id, name FROM Role WHERE id = ? OR name = ?').get(user.roleId, user.roleId);
+    const roleName = role ? role.name : user.roleId || 'EMPLOYEE';
+
+    let employee: any = null;
+    if (user.employeeId) {
+      employee = db.prepare('SELECT * FROM Employee WHERE id = ?').get(user.employeeId);
+    }
+
+    const perms: any[] = db.prepare(`
+      SELECT p.slug FROM RolePermission rp
+      JOIN Permission p ON rp.permissionId = p.id OR rp.permissionId = p.slug
+      WHERE rp.roleId = ?
+    `).all(role?.id || user.roleId);
+
+    return {
+      ...user,
+      role: roleName,
+      roleName,
+      permissions: perms.map((p) => p.slug),
+      department: employee?.department || 'General',
+      designation: employee?.designation || roleName,
+    };
   }
-
-  const activeRolePerms = await rolePerms.find({ roleId }).toArray();
-  const permIds = activeRolePerms.map((rp) => rp.permissionId);
-  const foundPerms = await perms.find({ $or: [{ id: { $in: permIds } }, { slug: { $in: permIds } }] }).toArray();
-
-  return {
-    ...user,
-    id: user.id || user._id?.toString(),
-    role: roleName,
-    roleName,
-    department: employee?.department || undefined,
-    designation: employee?.designation || undefined,
-    permissions: foundPerms.map((p) => p.slug || p.id),
-  };
 }
+
 
 export async function updateUserPassword(userId: string, passwordHash: string) {
   const users = await usersCol();
