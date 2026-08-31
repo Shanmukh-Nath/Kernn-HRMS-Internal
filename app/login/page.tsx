@@ -350,11 +350,12 @@ export default function LoginPage() {
           </div>
 
           {/* Divider */}
-          <div className="relative flex items-center justify-center">
-            <div className="border-t border-slate-200 w-full"></div>
-            <span className="bg-white px-3 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+          <div className="flex items-center gap-3 my-5">
+            <div className="flex-1 h-px bg-slate-200"></div>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0 select-none">
               Or password
             </span>
+            <div className="flex-1 h-px bg-slate-200"></div>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4">
