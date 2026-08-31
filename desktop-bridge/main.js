@@ -24,10 +24,10 @@ let mainWindow = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1100,
-    height: 760,
-    minWidth: 900,
-    minHeight: 640,
+    width: 1280,
+    height: 840,
+    minWidth: 1024,
+    minHeight: 700,
     title: 'Kernn Sync Bridge',
     backgroundColor: '#080c17',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',

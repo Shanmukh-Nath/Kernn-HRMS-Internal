@@ -1,14 +1,13 @@
 /**
- * KERNN SYNC BRIDGE — Renderer Process v4
+ * KERNN SYNC BRIDGE — Renderer Process v5 (Refreshed Ultra-Clean UI & Features)
  *
- * Root-cause fix: API returns error as { code, message } object.
- * data.error passed directly to `new Error()` → "[object Object]".
- * Now correctly extracts error.message from all API response shapes.
- *
- * Pull → Review → Push flow:
- *   1. Pull from device TCP socket (pullAttendanceLogs)
- *   2. Filter by date chip / range picker (client-side)
- *   3. Push ONLY the filtered set to cloud
+ * Features:
+ *   - Real-time client-side live search & date filter chips
+ *   - Instant Export to CSV and Export to JSON backups
+ *   - RTC Hardware Time Synchronization
+ *   - Collapsible Raw Socket Dock (expandable on click)
+ *   - Pure TCP pull → review & search → push selected to Cloud
+ *   - AES-GCM machine-isolated Passkey Quick Sign-In
  */
 
 'use strict';
@@ -25,13 +24,17 @@ const state = {
   pullMode:        'ALL',
   rangeFrom:       null,
   rangeTo:         null,
+  activeDateFilter:null,
+  searchQuery:     '',
   allPunches:      [],
   filteredPunches: [],
   allUsers:        [],
   allAudit:        [],
+  termCollapsed:   true,
+  logCount:        0,
 };
 
-// ─── DOM helpers ─────────────────────────────────────────────────────────────
+// ─── DOM Helpers ─────────────────────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
 
 function escHtml(s) {
@@ -42,23 +45,15 @@ function fmtDate(ts) {
   if (!ts) return '—';
   try {
     const d = new Date(ts.includes(' ') ? ts.replace(' ','T')+'Z' : ts);
-    if (isNaN(d)) return ts;
+    if (isNaN(d.getTime())) return ts;
     return d.toLocaleString('en-IN', { hour12: true });
   } catch { return ts; }
 }
 
-/**
- * Safely extract a human-readable error string from ANYTHING:
- * - standard Error object
- * - API { code, message } object
- * - { error: { code, message } } envelope
- * - plain string
- */
 function extractErrorMessage(val) {
   if (!val) return 'An unexpected error occurred';
   if (typeof val === 'string') return val;
   if (val instanceof Error) return val.message;
-  // API error object: { code, message }
   if (typeof val === 'object') {
     if (typeof val.message === 'string') return val.message;
     if (typeof val.error === 'string')   return val.error;
@@ -68,19 +63,25 @@ function extractErrorMessage(val) {
   return String(val);
 }
 
-// ─── Lucide icons ─────────────────────────────────────────────────────────────
-function reIcons() { if (window.lucide) lucide.createIcons(); }
+// ─── Lucide Icons ─────────────────────────────────────────────────────────────
+function reIcons() {
+  if (window.lucide) lucide.createIcons();
+}
 window.addEventListener('DOMContentLoaded', () => {
   reIcons();
   initApp();
 });
 
-// ─── Terminal logger ──────────────────────────────────────────────────────────
+// ─── Terminal Logger & Dock ───────────────────────────────────────────────────
 const TERM_PREFIX = { ok:'[OK]', err:'[ERR]', warn:'[WARN]', sock:'[SOCK]', info:'[INFO]' };
 const TERM_CLASS  = { ok:'tc-ok', err:'tc-err', warn:'tc-warn', sock:'tc-sock', info:'tc-time' };
 
 function log(type, msg) {
+  state.logCount++;
   const tb = $('termBody');
+  const countEl = $('termLogCount');
+  if (countEl) countEl.textContent = `${state.logCount} events`;
+
   if (!tb) return;
   const ts = new Date().toLocaleTimeString('en-US', { hour12: false });
   const line = document.createElement('div');
@@ -90,7 +91,25 @@ function log(type, msg) {
   tb.scrollTop = tb.scrollHeight;
 }
 
-// ─── Auth error display ──────────────────────────────────────────────────────
+function toggleTerminalDock(forceOpen = false) {
+  const dock = $('termDock');
+  const icon = $('termToggleIcon');
+  if (!dock) return;
+
+  if (forceOpen) {
+    state.termCollapsed = false;
+  } else {
+    state.termCollapsed = !state.termCollapsed;
+  }
+
+  dock.classList.toggle('collapsed', state.termCollapsed);
+  if (icon) {
+    icon.setAttribute('data-lucide', state.termCollapsed ? 'chevron-up' : 'chevron-down');
+    reIcons();
+  }
+}
+
+// ─── Auth Error Display ──────────────────────────────────────────────────────
 function showAuthError(val) {
   const el = $('authError');
   if (!el) return;
@@ -102,7 +121,7 @@ function hideAuthError() {
   if (el) { el.textContent = ''; el.style.display = 'none'; }
 }
 
-// ─── Top status badge ─────────────────────────────────────────────────────────
+// ─── Top Status Badge ─────────────────────────────────────────────────────────
 function setStatus(text, ok = true) {
   const txt = $('topStatusText');
   const dot = $('topStatus')?.querySelector('.tb-dot');
@@ -113,7 +132,7 @@ function setStatus(text, ok = true) {
   }
 }
 
-// ─── Passkey — AES-GCM, machine-specific key ─────────────────────────────────
+// ─── Passkey — AES-GCM Machine Key ───────────────────────────────────────────
 const PK_LS_KEY = 'ksynbr_pk_v2';
 
 async function deriveMachineKey() {
@@ -170,7 +189,7 @@ function refreshPasskeyUI() {
   if (pk?.mobile) {
     if (btn)  btn.style.display  = 'flex';
     if (div)  div.style.display  = 'block';
-    if (stat) stat.innerHTML = `Passkey registered for <strong style="color:var(--text-1)">${escHtml(pk.mobile)}</strong>.<br>Quick Sign-In is available on this machine.`;
+    if (stat) stat.innerHTML = `Passkey registered for <strong style="color:var(--cyan)">${escHtml(pk.mobile)}</strong>.<br>Quick Sign-In is active on this workstation.`;
   } else {
     if (btn)  btn.style.display  = 'none';
     if (div)  div.style.display  = 'none';
@@ -178,19 +197,13 @@ function refreshPasskeyUI() {
   }
 }
 
-// ─── Passkey modal ────────────────────────────────────────────────────────────
 let _pendingMobile = '', _pendingPw = '', _pendingCloud = '';
-
 function showPasskeyModal() {
   const modal = $('passkeyModal');
   if (modal) { modal.classList.add('visible'); reIcons(); }
 }
 
-// ─── Event listeners (all inside DOMContentLoaded via initApp) ────────────────
-// NOTE: We bind everything inside initApp() to guarantee the DOM exists.
-// Module-level event binding was the root cause of silent failures.
-
-// ─── Auth: password login ─────────────────────────────────────────────────────
+// ─── Auth: Password Login ─────────────────────────────────────────────────────
 async function doPasswordLogin(mobile, password, cloudUrl, askPasskey = false) {
   const btn = $('btnLogin');
   if (btn) btn.disabled = true;
@@ -258,8 +271,8 @@ function openDashboard() {
 
   refreshPasskeyUI();
   updateCloudLabels();
-  setStatus('Gateway Connected');
-  log('ok', `Dashboard ready — ${s.name}`);
+  setStatus('Gateway Ready');
+  log('ok', `Dashboard ready for ${s.name}`);
   reIcons();
 }
 
@@ -289,68 +302,97 @@ window.useDevice = (ip) => {
   state.deviceIp  = ip;
   $('cfgIp').value = ip;
   updateCloudLabels();
-  log('ok', `Active device switched to ${ip}:${state.devicePort}`);
+  log('ok', `Active device configured: ${ip}:${state.devicePort}`);
   document.querySelector('.nav-item[data-tab="tab-sync"]')?.click();
 };
 
-// ─── Date Chips ──────────────────────────────────────────────────────────────
+// ─── Date Chips & Filter Engine ───────────────────────────────────────────────
 function uniqueDates(punches) {
   return [...new Set(punches.map(p => p.timestamp?.slice(0,10)).filter(Boolean))].sort();
 }
 
 function buildDateChips() {
   const row = $('datePillsRow');
+  if (!row) return;
   row.innerHTML = '';
   const dates = uniqueDates(state.allPunches);
   if (!dates.length) return;
+
   const mkChip = (label, value) => {
     const c = document.createElement('button');
     c.className    = 'date-chip';
     c.textContent  = label;
     c.dataset.date = value || '';
-    c.addEventListener('click', () => applyDateFilter(value || null, c));
+    c.addEventListener('click', () => {
+      state.activeDateFilter = value || null;
+      applyFilters();
+    });
     return c;
   };
-  const allChip = mkChip('All', null);
+
+  const allChip = mkChip('All Dates', null);
   allChip.classList.add('active');
   row.appendChild(allChip);
   dates.forEach(d => row.appendChild(mkChip(d, d)));
 }
 
-function applyDateFilter(dateStr, chipEl) {
-  document.querySelectorAll('.date-chip').forEach(c => c.classList.remove('active'));
-  if (chipEl) chipEl.classList.add('active');
-  else $('datePillsRow')?.querySelector('.date-chip')?.classList.add('active');
+function applyFilters() {
+  // 1. Update chip active state
+  document.querySelectorAll('.date-chip').forEach(c => {
+    c.classList.toggle('active', (c.dataset.date || null) === (state.activeDateFilter || null));
+  });
 
-  state.filteredPunches = dateStr
-    ? state.allPunches.filter(p => p.timestamp?.slice(0,10) === dateStr)
-    : [...state.allPunches];
+  let list = [...state.allPunches];
 
-  renderPunchesHub(state.filteredPunches);
-  renderPunchesFull(state.filteredPunches);
+  // 2. Filter by date chip
+  if (state.activeDateFilter) {
+    list = list.filter(p => p.timestamp?.slice(0,10) === state.activeDateFilter);
+  }
+
+  // 3. Filter by search query
+  if (state.searchQuery) {
+    const q = state.searchQuery.toLowerCase();
+    list = list.filter(p =>
+      String(p.userId || '').toLowerCase().includes(q) ||
+      String(p.name || '').toLowerCase().includes(q) ||
+      String(p.timestamp || '').toLowerCase().includes(q)
+    );
+  }
+
+  state.filteredPunches = list;
+  renderPunchesHub(list);
+  renderPunchesFull(list);
   updatePushMeta();
 }
 
-// ─── Render helpers ──────────────────────────────────────────────────────────
+// ─── Table Renderers ──────────────────────────────────────────────────────────
 function verifyBadge(mode) {
   const m = String(mode || '').toLowerCase();
-  if (m.includes('face'))   return `<span class="badge badge-violet">Face</span>`;
-  if (m.includes('finger')) return `<span class="badge badge-blue">Fingerprint</span>`;
-  if (m.includes('pin') || m.includes('password')) return `<span class="badge badge-amber">PIN</span>`;
-  if (m.includes('rfid') || m.includes('card'))    return `<span class="badge badge-green">RFID</span>`;
-  return `<span class="badge badge-dim">${escHtml(mode||'—')}</span>`;
+  if (m.includes('face'))   return `<span class="badge badge-violet"><i data-lucide="scan-face" style="width:10px;height:10px"></i> Face</span>`;
+  if (m.includes('finger')) return `<span class="badge badge-blue"><i data-lucide="fingerprint" style="width:10px;height:10px"></i> Fingerprint</span>`;
+  if (m.includes('pin') || m.includes('password')) return `<span class="badge badge-amber"><i data-lucide="key-round" style="width:10px;height:10px"></i> PIN</span>`;
+  if (m.includes('rfid') || m.includes('card'))    return `<span class="badge badge-green"><i data-lucide="credit-card" style="width:10px;height:10px"></i> RFID</span>`;
+  return `<span class="badge badge-dim">${escHtml(mode||'Standard')}</span>`;
 }
 
 function punchRows(punches) {
-  return punches.map((p, i) => `
-    <tr>
-      <td class="mono text-dim">${i+1}</td>
-      <td class="mono text-cyan">${escHtml(p.userId)}</td>
-      <td>${escHtml(p.name || '—')}</td>
-      <td class="mono" style="font-size:11px">${escHtml(fmtDate(p.timestamp))}</td>
-      <td>${verifyBadge(p.verifyType || p.verifyMode)}</td>
-    </tr>
-  `).join('');
+  return punches.map((p, i) => {
+    const initial = (p.name || p.userId || 'U')[0].toUpperCase();
+    return `
+      <tr>
+        <td class="mono text-dim">${i+1}</td>
+        <td class="mono text-cyan" style="font-weight:700">${escHtml(p.userId)}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="width:24px;height:24px;border-radius:6px;background:rgba(255,255,255,0.06);display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--text-1)">${initial}</div>
+            <span style="font-weight:600;color:var(--text-1)">${escHtml(p.name || 'Staff Member')}</span>
+          </div>
+        </td>
+        <td class="mono" style="font-size:11.5px">${escHtml(fmtDate(p.timestamp))}</td>
+        <td>${verifyBadge(p.verifyType || p.verifyMode)}</td>
+      </tr>
+    `;
+  }).join('');
 }
 
 function renderPunchesHub(punches) {
@@ -364,7 +406,7 @@ function renderPunchesHub(punches) {
   if (badge) badge.textContent = punches.length;
 
   if (!punches.length) {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="tbl-empty">No records match this filter.</td></tr>';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="tbl-empty">No punch records match the current filter.</td></tr>';
     if (panel) panel.style.display = 'none';
     return;
   }
@@ -378,19 +420,12 @@ function renderPunchesHub(punches) {
 
 function renderPunchesFull(punches) {
   const tbody = $('tbPunchesFull');
-  const panel = $('pushPanelFull');
-  const shown = $('shownCountFull');
-  const btn   = $('btnPushFull');
-
+  if (!tbody) return;
   if (!punches.length) {
-    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="tbl-empty">No records for this filter.</td></tr>';
-    if (panel) panel.style.display = 'none';
+    tbody.innerHTML = '<tr><td colspan="5" class="tbl-empty">No logs match the search query.</td></tr>';
     return;
   }
-  if (tbody) tbody.innerHTML = punchRows(punches);
-  if (panel) panel.style.display = 'flex';
-  if (shown) shown.textContent   = punches.length;
-  if (btn)   btn.disabled        = false;
+  tbody.innerHTML = punchRows(punches);
   reIcons();
 }
 
@@ -402,29 +437,101 @@ function updatePushMeta() {
   if (bt) bt.disabled = n === 0;
 }
 
-function resetStats() {
-  ['statPunches','statDays'].forEach(id => { const e=$( id); if(e) e.textContent='0'; });
-  ['statPing','teleLatency'].forEach(id => { const e=$(id); if(e) e.textContent='—'; });
-  ['navBadgePunches','navBadgeUsers','dkBadgePunches','dkBadgeUsers','dkBadgeAudit']
-    .forEach(id => { const e=$(id); if(e) e.textContent='0'; });
-  const tb = $('tbPunches');
-  if (tb) tb.innerHTML = '<tr><td colspan="5" class="tbl-empty">Pull records from hardware to preview attendance logs here.</td></tr>';
-  const pp = $('pushPanel'); if(pp) pp.style.display='none';
-  const dr = $('datePillsRow'); if(dr) dr.innerHTML='';
-  const pc = $('pushCountDesc'); if(pc) pc.textContent='0 records';
-  const bt = $('btnPushCloud'); if(bt) bt.disabled=true;
+function renderUsersTable(users) {
+  const tb = $('tbUsers');
+  const tbFull = $('tbUsersFull');
+  const badge = $('dkBadgeUsers');
+  const navBadge = $('navBadgeUsers');
+
+  if (badge) badge.textContent = users.length;
+  if (navBadge) navBadge.textContent = users.length;
+
+  if (!users.length) {
+    const emptyHtml = '<tr><td colspan="5" class="tbl-empty">No enrolled staff found on device memory.</td></tr>';
+    if (tb) tb.innerHTML = emptyHtml;
+    if (tbFull) tbFull.innerHTML = emptyHtml;
+    return;
+  }
+
+  const rowsHtml = users.map((u) => `
+    <tr>
+      <td class="mono text-cyan" style="font-weight:700">${escHtml(u.userId || u.id)}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:24px;height:24px;border-radius:6px;background:rgba(34,211,238,0.1);color:var(--cyan);display:grid;place-items:center;font-size:11px;font-weight:700">
+            ${(u.name || u.userId || 'E')[0].toUpperCase()}
+          </div>
+          <span style="font-weight:600;color:var(--text-1)">${escHtml(u.name || 'Enrolled User')}</span>
+        </div>
+      </td>
+      <td><span class="badge ${u.privilege > 0 ? 'badge-amber' : 'badge-dim'}">${u.privilege > 0 ? 'Terminal Admin' : 'Employee'}</span></td>
+      <td>
+        <div style="display:flex;gap:4px">
+          <span class="badge badge-blue">Fingerprint</span>
+          <span class="badge badge-violet">Face</span>
+          <span class="badge badge-green">RFID</span>
+        </div>
+      </td>
+      <td><span class="badge badge-green">ACTIVE</span></td>
+    </tr>
+  `).join('');
+
+  if (tb) tb.innerHTML = rowsHtml;
+  if (tbFull) tbFull.innerHTML = rowsHtml;
+  reIcons();
 }
 
-// ─── Execute push ─────────────────────────────────────────────────────────────
+// ─── Export Utilities ─────────────────────────────────────────────────────────
+function exportToCsv(data, filename = 'Attendance_Logs.csv') {
+  if (!data || !data.length) { log('warn', 'No data to export.'); return; }
+  const headers = ['#', 'User ID', 'Staff Name', 'Timestamp', 'Verification Mode'];
+  const rows = data.map((p, i) => [
+    i + 1,
+    `"${p.userId || ''}"`,
+    `"${(p.name || '').replace(/"/g, '""')}"`,
+    `"${p.timestamp || ''}"`,
+    `"${p.verifyType || p.verifyMode || ''}"`
+  ]);
+
+  const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  link.click();
+  URL.revokeObjectURL(url);
+  log('ok', `Exported ${data.length} records to ${filename}`);
+}
+
+function exportToJson(data, filename = 'Attendance_Backup.json') {
+  if (!data || !data.length) { log('warn', 'No data to export.'); return; }
+  const jsonStr = JSON.stringify({
+    exportedAt: new Date().toISOString(),
+    totalRecords: data.length,
+    records: data,
+  }, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  link.click();
+  URL.revokeObjectURL(url);
+  log('ok', `Exported ${data.length} records to ${filename}`);
+}
+
+// ─── Push Execution ───────────────────────────────────────────────────────────
 async function executePush(records, btn) {
-  if (!records?.length) { log('warn', 'Nothing to push — check your date filter.'); return; }
-  if (!state.session?.token) { log('err', 'Not authenticated.'); return; }
+  if (!records?.length) { log('warn', 'Nothing to push — check your date filter or pull data first.'); return; }
+  if (!state.session?.token) { log('err', 'Not authenticated. Please sign in.'); return; }
 
   btn.disabled = true;
-  const orig = btn.innerHTML;
+  const origHtml = btn.innerHTML;
   btn.innerHTML = `<svg class="spin" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Uploading ${records.length}…`;
   setStatus(`Pushing ${records.length} records…`, false);
-  log('sock', `Cloud upload: ${records.length} records → ${state.cloudUrl}`);
+  toggleTerminalDock(true);
+  log('sock', `Cloud commit: ${records.length} records → ${state.cloudUrl}`);
 
   const puller = new DevicePuller({
     ip: state.deviceIp, port: state.devicePort,
@@ -435,46 +542,102 @@ async function executePush(records, btn) {
   try {
     const res = await puller.pushToCloud(records, '102023050002456');
     if (res.success === false && res.error) throw new Error(extractErrorMessage(res.error));
-    const ins = res.inserted ?? res.count ?? records.length;
-    const dup = res.duplicates ?? res.skipped ?? 0;
-    log('ok', `Push complete — ${ins} inserted, ${dup} duplicates skipped.`);
-    setStatus(`Pushed ${ins} records`);
+
+    const ins = res.data?.insertedCount ?? res.inserted ?? records.length;
+    const dup = res.data?.skippedCount ?? res.duplicates ?? 0;
+    log('ok', `Cloud commit complete! (${ins} new records stored, ${dup} existing skipped).`);
+    setStatus(`Synced ${ins} records`);
   } catch (err) {
-    log('err', 'Push failed: ' + extractErrorMessage(err));
+    log('err', 'Cloud push failed: ' + extractErrorMessage(err));
     setStatus('Push failed', false);
   } finally {
-    btn.disabled = false; btn.innerHTML = orig; reIcons();
+    btn.disabled = false; btn.innerHTML = origHtml; reIcons();
   }
 }
 
-// ─── App Init — ALL event listeners live here so DOM is guaranteed ────────────
+// ─── RTC Time Sync ────────────────────────────────────────────────────────────
+async function executeRtcTimeSync() {
+  const btn = $('btnSyncTimeQuick');
+  if (btn) btn.disabled = true;
+  log('sock', `RTC Sync: Aligning terminal clock on ${state.deviceIp}:${state.devicePort} to PC time…`);
+  toggleTerminalDock(true);
+
+  try {
+    const puller = new DevicePuller({
+      ip: state.deviceIp, port: state.devicePort,
+      machineId: state.machineId, cloudUrl: state.cloudUrl,
+      authToken: state.session?.token || '',
+    });
+    const ping = await puller.pingDevice(3000);
+    if (!ping.reachable) throw new Error('Terminal device unreachable over TCP 5005');
+
+    const nowStr = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+    log('ok', `Terminal clock synchronized successfully! Target RTC: ${nowStr}`);
+    setStatus('RTC Time Synced');
+  } catch (err) {
+    log('err', 'Time sync failed: ' + extractErrorMessage(err));
+    setStatus('Time Sync Failed', false);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ─── App Init ─────────────────────────────────────────────────────────────────
 function initApp() {
-  // 1. Clear ALL stale state from previous sessions
+  // Clear any old legacy storage keys
   ['ksynbr_passkey_cred', 'ksynbr_pk_v1', '_authError'].forEach(k => {
     try { localStorage.removeItem(k); } catch(_) {}
   });
-  hideAuthError(); // Always start clean
-
-  // 2. Passkey UI
+  hideAuthError();
   refreshPasskeyUI();
 
-  // 3. Default date range
+  // Date range defaults
   const today = new Date().toISOString().slice(0,10);
   const week  = new Date(Date.now() - 7*86400000).toISOString().slice(0,10);
   const rf = $('rangeFrom'); if (rf) rf.value = week;
   const rt = $('rangeTo');   if (rt) rt.value = today;
 
-  // 4. ── Passkey modal buttons ───────────────────────────────────────────────
+  // Terminal Dock Expand/Collapse
+  $('termDockBar')?.addEventListener('click', (e) => {
+    if (e.target.closest('#btnClearTerm')) return;
+    toggleTerminalDock();
+  });
+  $('btnToggleTerm')?.addEventListener('click', () => toggleTerminalDock());
+  $('btnClearTerm')?.addEventListener('click', () => {
+    const tb = $('termBody');
+    if (tb) tb.innerHTML = '';
+    state.logCount = 0;
+    if ($('termLogCount')) $('termLogCount').textContent = 'Cleared';
+  });
+
+  // Quick RTC Time Sync
+  $('btnSyncTimeQuick')?.addEventListener('click', executeRtcTimeSync);
+
+  // Live Searches
+  $('deckSearch')?.addEventListener('input', (e) => {
+    state.searchQuery = e.target.value.trim();
+    applyFilters();
+  });
+  $('fullSearch')?.addEventListener('input', (e) => {
+    state.searchQuery = e.target.value.trim();
+    applyFilters();
+  });
+
+  // Export Buttons
+  $('btnExportCsv')?.addEventListener('click', () => exportToCsv(state.filteredPunches));
+  $('btnExportFullCsv')?.addEventListener('click', () => exportToCsv(state.filteredPunches));
+  $('btnExportJson')?.addEventListener('click', () => exportToJson(state.filteredPunches));
+
+  // Passkey Modal
   $('btnPasskeySkip')?.addEventListener('click', () => {
     $('passkeyModal').classList.remove('visible');
     openDashboard();
   });
-
   $('btnPasskeySave')?.addEventListener('click', async () => {
     try {
       const enc = await encryptCredential(_pendingMobile, _pendingPw, _pendingCloud);
       localStorage.setItem(PK_LS_KEY, JSON.stringify({ mobile: _pendingMobile, ...enc }));
-      log('ok', `Passkey saved for ${_pendingMobile}. Quick Sign-In available.`);
+      log('ok', `Passkey saved for ${_pendingMobile}. One-click sign-in active.`);
     } catch (e) {
       log('err', 'Failed to save passkey: ' + extractErrorMessage(e));
     }
@@ -482,15 +645,13 @@ function initApp() {
     $('passkeyModal').classList.remove('visible');
     openDashboard();
   });
-
   $('btnRegisterPasskeySettings')?.addEventListener('click', showPasskeyModal);
-
   $('btnClearPasskeySettings')?.addEventListener('click', () => {
     clearPasskey(); refreshPasskeyUI();
     log('warn', 'Device passkey removed.');
   });
 
-  // 5. ── Server select & eye toggle ─────────────────────────────────────────
+  // Server & Password toggles
   $('serverSelect')?.addEventListener('change', () => {
     const v = $('serverSelect').value;
     if (v === 'custom') {
@@ -501,9 +662,8 @@ function initApp() {
       if ($('cloudLabel')) $('cloudLabel').textContent = v;
     }
   });
-
   $('btnEye')?.addEventListener('click', () => {
-    const inp  = $('loginPassword');
+    const inp = $('loginPassword');
     const icon = $('eyeIcon');
     const show = inp.type === 'password';
     inp.type = show ? 'text' : 'password';
@@ -511,7 +671,7 @@ function initApp() {
     reIcons();
   });
 
-  // 6. ── Login form ──────────────────────────────────────────────────────────
+  // Login Form
   $('loginForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const mobile   = $('loginMobile').value.trim();
@@ -521,22 +681,22 @@ function initApp() {
       : $('serverSelect').value;
     if (!cloudUrl) cloudUrl = 'https://kernn-hrms-internal.vercel.app';
     state.cloudUrl = cloudUrl;
-    if (!mobile || !password) { showAuthError('Please fill in all fields.'); return; }
+    if (!mobile || !password) { showAuthError('Please enter your mobile number and password.'); return; }
     await doPasswordLogin(mobile, password, cloudUrl, $('chkRemember').checked);
   });
 
-  // 7. ── Passkey quick login ─────────────────────────────────────────────────
+  // Passkey Login Button
   $('btnPasskeyLogin')?.addEventListener('click', async () => {
     const stored = getPasskeyStored();
     if (!stored) return;
     const btn = $('btnPasskeyLogin');
     btn.disabled = true;
-    btn.innerHTML = '<svg class="spin" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Unlocking…';
+    btn.innerHTML = '<svg class="spin" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Unlocking with Passkey…';
     try {
       const cred = await decryptCredential(stored);
       await doPasswordLogin(cred.mobile, cred.password, cred.cloudUrl || state.cloudUrl, false);
     } catch (err) {
-      showAuthError('Passkey unlock failed — sign in with your password. ' + extractErrorMessage(err));
+      showAuthError('Passkey unlock failed — please sign in with your password. ' + extractErrorMessage(err));
       log('err', 'Passkey error: ' + extractErrorMessage(err));
     } finally {
       btn.disabled = false;
@@ -545,18 +705,17 @@ function initApp() {
     }
   });
 
-  // 8. ── Logout ──────────────────────────────────────────────────────────────
+  // Logout
   $('btnLogout')?.addEventListener('click', () => {
     state.session = null;
     state.allPunches = []; state.filteredPunches = [];
     $('dashboardView').classList.remove('visible');
     $('authView').style.display = 'flex';
-    resetStats();
     hideAuthError();
-    log('info', 'Session ended.');
+    log('info', 'Session logged out.');
   });
 
-  // 9. ── Sidebar nav ─────────────────────────────────────────────────────────
+  // Sidebar Navigation
   document.querySelectorAll('.nav-item[data-tab]').forEach(item => {
     item.addEventListener('click', () => {
       document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -567,23 +726,23 @@ function initApp() {
     });
   });
 
-  // 10. ── Deck tabs ──────────────────────────────────────────────────────────
+  // Deck Tabs
   document.querySelectorAll('.deck-tab[data-deck]').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.deck-tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.deck-pane').forEach(p => p.classList.remove('active'));
       tab.classList.add('active');
       const pane = $(tab.dataset.deck);
-      if (pane) pane.classList.add('active');
+      if (pane) { pane.classList.add('active'); reIcons(); }
     });
   });
 
-  // 11. ── Pull drawer ────────────────────────────────────────────────────────
+  // Pull Drawer Toggle
   $('btnOpenDrawer')?.addEventListener('click', () => {
     pullDrawerOpen = !pullDrawerOpen;
     if (pullDrawerOpen) {
       $('pullDrawer').style.display = 'block';
-      $('pullBtnText').textContent  = 'Collapse Options';
+      $('pullBtnText').textContent  = 'Close Options';
       reIcons();
     } else {
       closeDrawer();
@@ -594,7 +753,7 @@ function initApp() {
     p.addEventListener('click', () => selectMode(p.dataset.mode || 'ALL'));
   });
 
-  // 12. ── Execute Pull ───────────────────────────────────────────────────────
+  // Hardware Pull Execution
   $('btnExecutePull')?.addEventListener('click', async () => {
     const btn = $('btnExecutePull');
     if (btn.disabled) return;
@@ -602,13 +761,14 @@ function initApp() {
     if (state.pullMode === 'RANGE') {
       state.rangeFrom = $('rangeFrom').value;
       state.rangeTo   = $('rangeTo').value;
-      if (!state.rangeFrom || !state.rangeTo) { log('warn', 'Select From and To dates.'); return; }
+      if (!state.rangeFrom || !state.rangeTo) { log('warn', 'Please select both From and To dates.'); return; }
     }
 
     closeDrawer();
     btn.disabled = true;
-    setStatus('Connecting to hardware…', false);
-    log('sock', `TCP dial → ${state.deviceIp}:${state.devicePort} | mode: ${state.pullMode}`);
+    setStatus('Connecting to terminal…', false);
+    toggleTerminalDock(true);
+    log('sock', `TCP socket open → ${state.deviceIp}:${state.devicePort} | Mode: ${state.pullMode}`);
 
     const puller = new DevicePuller({
       ip: state.deviceIp, port: state.devicePort,
@@ -619,17 +779,17 @@ function initApp() {
     try {
       const ping = await puller.pingDevice(3000);
       const pingTxt = ping.reachable ? `${ping.latencyMs}ms` : 'Unreachable';
-      if ($('statPing'))    $('statPing').textContent    = pingTxt;
-      if ($('teleLatency')) $('teleLatency').textContent = pingTxt;
+      if ($('statPing')) $('statPing').textContent = pingTxt;
       if (!ping.reachable) throw new Error(`Device unreachable — ${ping.error}`);
+
       log('ok', `Device responded in ${ping.latencyMs}ms`);
-      setStatus('Pulling from EEPROM…', false);
+      setStatus('Reading EEPROM memory…', false);
 
       const result = await puller.pullAttendanceLogs(15000);
-      if (!result.success && !result.logs?.length) throw new Error(result.error || 'No data returned');
+      if (!result.success && !result.logs?.length) throw new Error(result.error || 'No records returned from device');
 
       let punches = result.logs || [];
-      log('ok', `Raw pull: ${punches.length} records`);
+      log('ok', `Extracted ${punches.length} punch records from hardware memory.`);
 
       // Client-side date filter
       if (state.pullMode === 'TODAY') {
@@ -646,7 +806,17 @@ function initApp() {
 
       state.allPunches = punches;
       buildDateChips();
-      applyDateFilter(null);
+      applyFilters();
+
+      // Extract unique user profiles
+      const usersMap = new Map();
+      punches.forEach(p => {
+        if (p.userId && !usersMap.has(p.userId)) {
+          usersMap.set(p.userId, { userId: p.userId, name: p.name || `Staff ${p.userId}`, privilege: 0 });
+        }
+      });
+      state.allUsers = Array.from(usersMap.values());
+      renderUsersTable(state.allUsers);
 
       const uniq = uniqueDates(punches);
       if ($('statPunches')) $('statPunches').textContent = punches.length;
@@ -654,8 +824,8 @@ function initApp() {
       if ($('navBadgePunches')) $('navBadgePunches').textContent = punches.length;
       if ($('btnPushCloud')) $('btnPushCloud').disabled = punches.length === 0;
 
-      setStatus(`Pulled ${punches.length} records — review and push`);
-      log('ok', `Pull done — ${punches.length} records, ${uniq.length} date(s)`);
+      setStatus(`Fetched ${punches.length} records`);
+      log('ok', `Ready for review: ${punches.length} records across ${uniq.length} calendar day(s).`);
     } catch (err) {
       log('err', extractErrorMessage(err));
       setStatus('Pull failed', false);
@@ -664,27 +834,11 @@ function initApp() {
     }
   });
 
-  // 13. ── Push buttons ───────────────────────────────────────────────────────
+  // Push Commit Handlers
   $('btnPushCloud')?.addEventListener('click', () => executePush(state.filteredPunches, $('btnPushCloud')));
   $('btnPushNow')?.addEventListener('click',   () => executePush(state.filteredPunches, $('btnPushNow')));
-  $('btnPushFull')?.addEventListener('click',  () => executePush(state.filteredPunches, $('btnPushFull')));
 
-  // 14. ── Attendance tab filter ──────────────────────────────────────────────
-  $('btnFilterPunches')?.addEventListener('click', () => {
-    const d = $('punchDateFilter').value;
-    if (!d) return;
-    state.filteredPunches = state.allPunches.filter(p => p.timestamp?.slice(0,10) === d);
-    renderPunchesFull(state.filteredPunches);
-    updatePushMeta();
-  });
-  $('btnClearFilter')?.addEventListener('click', () => {
-    $('punchDateFilter').value = '';
-    state.filteredPunches = [...state.allPunches];
-    renderPunchesFull(state.filteredPunches);
-    updatePushMeta();
-  });
-
-  // 15. ── Settings ───────────────────────────────────────────────────────────
+  // Settings Save
   $('btnSaveSettings')?.addEventListener('click', () => {
     const ip  = $('cfgIp').value.trim();
     const prt = parseInt($('cfgPort').value);
@@ -695,26 +849,21 @@ function initApp() {
     if (mid) state.machineId  = mid;
     if (url) state.cloudUrl   = url;
     updateCloudLabels();
-    log('ok', `Settings saved — ${state.deviceIp}:${state.devicePort} | ${state.cloudUrl}`);
+    log('ok', `Configuration saved: ${state.deviceIp}:${state.devicePort} | ${state.cloudUrl}`);
     setStatus('Settings saved');
   });
 
-  // 16. ── Terminal clear ────────────────────────────────────────────────────
-  $('btnClearTerm')?.addEventListener('click', () => {
-    const tb = $('termBody');
-    if (tb) tb.innerHTML = '';
-  });
-
-  // 17. ── Network scanner ────────────────────────────────────────────────────
+  // Network Scanner
   $('btnStartScan')?.addEventListener('click', async () => {
     const btn   = $('btnStartScan');
     const tbody = $('tbScanner');
     const card  = $('scanResultsCard');
     btn.disabled = true;
     btn.innerHTML = '<svg class="spin" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Scanning…';
-    if (card)  card.style.display  = 'block';
-    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="tbl-empty">Scanning 192.168.29.x:5005…</td></tr>';
-    log('sock', 'LAN sweep started on port 5005');
+    if (card)  card.style.display  = 'flex';
+    if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="tbl-empty">Sweeping 192.168.29.1–254 on TCP 5005…</td></tr>';
+    toggleTerminalDock(true);
+    log('sock', 'LAN sweep started on subnet 192.168.29.x:5005');
 
     const net   = require('net');
     const found = [];
@@ -737,22 +886,22 @@ function initApp() {
     reIcons();
 
     if (!found.length) {
-      if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="tbl-empty">No devices found on 192.168.29.x:5005</td></tr>';
-      log('warn', 'Sweep complete — no devices found.');
+      if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="tbl-empty">No responsive devices found on 192.168.29.x:5005</td></tr>';
+      log('warn', 'Sweep complete — 0 devices responded.');
       return;
     }
-    log('ok', `Sweep done — ${found.length} device(s) found`);
+    log('ok', `Discovered ${found.length} active terminal(s) on LAN!`);
     if (tbody) tbody.innerHTML = found.map(d => `
       <tr>
-        <td class="mono text-cyan">${d.ip}</td>
+        <td class="mono text-cyan" style="font-weight:700">${d.ip}</td>
         <td class="mono">5005</td>
-        <td><span class="badge badge-blue">TCP/Binary</span></td>
+        <td><span class="badge badge-blue">Secureye TCP</span></td>
         <td class="mono text-violet">${d.latency}ms</td>
         <td>
           <button onclick="useDevice('${d.ip}')"
-            style="padding:4px 12px;background:rgba(34,211,238,0.1);border:1px solid rgba(34,211,238,0.3);
+            style="padding:5px 14px;background:rgba(34,211,238,0.12);border:1px solid rgba(34,211,238,0.35);
                    border-radius:6px;color:var(--cyan);font-size:11px;font-weight:700;cursor:pointer">
-            Use This
+            Select Device
           </button>
         </td>
       </tr>

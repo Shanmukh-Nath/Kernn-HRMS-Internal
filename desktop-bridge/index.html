@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Kernn Sync Bridge</title>
   <link rel="stylesheet" href="styles.css">
-  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.min.js"></script>
 </head>
 <body>
 
@@ -14,21 +14,29 @@
   <div class="tb-brand">
     <div class="tb-icon">K</div>
     <span class="tb-name">Kernn Sync Bridge</span>
-    <span class="tb-ver">v1.0 PRO</span>
+    <span class="tb-ver">v2.0 PRO</span>
   </div>
-  <div class="tb-status" id="topStatus">
-    <span class="tb-dot"></span>
-    <span id="topStatusText">Terminal Ready</span>
+  <div class="tb-actions">
+    <button class="tb-quick-btn" id="btnSyncTimeQuick" title="Synchronize Terminal RTC Time to PC Clock">
+      <i data-lucide="clock" style="width:13px;height:13px;color:var(--cyan)"></i>
+      <span>Sync RTC Time</span>
+    </button>
+    <div class="tb-status" id="topStatus">
+      <div class="tb-dot"></div>
+      <span id="topStatusText">Terminal Ready</span>
+    </div>
   </div>
 </header>
 
 <!-- ===== PASSKEY REGISTRATION MODAL ===== -->
-<div id="passkeyModal">
-  <div class="pk-modal-card">
-    <div class="pk-icon"><i data-lucide="fingerprint" style="width:26px;height:26px"></i></div>
+<div class="modal-overlay" id="passkeyModal">
+  <div class="modal-card">
+    <div class="pk-icon-wrap">
+      <i data-lucide="fingerprint" style="width:30px;height:30px"></i>
+    </div>
     <div class="pk-title">Enable Device Passkey?</div>
     <div class="pk-sub">
-      Save a secure passkey on this device so you can sign in instantly — without entering your password again.<br><br>
+      Save a secure encrypted passkey on this workstation so you can sign in instantly with one click — without re-entering your password.<br><br>
       <strong style="color:var(--text-1)">Your credentials never leave this machine.</strong>
     </div>
     <div class="pk-btns">
@@ -52,7 +60,7 @@
 
     <!-- Quick Passkey Login (only shows when passkey is registered) -->
     <button class="auth-passkey-btn" id="btnPasskeyLogin" style="display:none">
-      <i data-lucide="fingerprint" style="width:15px;height:15px"></i>
+      <i data-lucide="fingerprint" style="width:16px;height:16px"></i>
       Quick Sign In with Saved Passkey
     </button>
     <div class="auth-divider" id="authDivider" style="display:none">or sign in with password</div>
@@ -73,7 +81,7 @@
 
       <div class="field">
         <label>Mobile Number / User ID</label>
-        <input type="text" id="loginMobile" placeholder="9876543210" autocomplete="username">
+        <input type="text" id="loginMobile" placeholder="8919988709" autocomplete="username">
       </div>
 
       <div class="field">
@@ -106,7 +114,7 @@
   <aside class="sidebar">
     <div>
       <div class="user-card">
-        <div class="user-ava" id="sidebarAva">A</div>
+        <div class="user-ava" id="sidebarAva">M</div>
         <div class="user-info">
           <div class="user-name" id="sidebarName">Manager</div>
           <div class="user-role" id="sidebarRole">ADMIN</div>
@@ -116,7 +124,7 @@
         </button>
       </div>
 
-      <div class="nav-section" style="margin-top:4px">Operations</div>
+      <div class="nav-section">Operations</div>
       <div class="nav-item active" data-tab="tab-sync">
         <i data-lucide="zap" style="width:15px;height:15px"></i>Sync Hub
       </div>
@@ -135,15 +143,15 @@
         <i data-lucide="wifi" style="width:15px;height:15px"></i>Network Scan
       </div>
 
-      <div class="nav-section" style="margin-top:14px">Config</div>
+      <div class="nav-section">Configuration</div>
       <div class="nav-item" data-tab="tab-settings">
         <i data-lucide="sliders" style="width:15px;height:15px"></i>Device & Cloud
       </div>
     </div>
 
     <div class="sidebar-footer">
-      <div>Engine: <span style="color:var(--text-2);font-weight:600">Pure TCP</span></div>
-      <div>Platform: <span style="color:var(--cyan);font-weight:600" id="platformLabel">—</span></div>
+      <div>Protocol: <span style="color:var(--cyan);font-weight:600">Pure TCP 5005</span></div>
+      <div>Platform: <span style="color:var(--text-1);font-weight:600" id="platformLabel">Windows</span></div>
     </div>
   </aside>
 
@@ -156,12 +164,12 @@
       <!-- Step Cards -->
       <div class="steps-row">
         <!-- Step 1: Pull -->
-        <div class="step-card" style="border-color:rgba(34,211,238,0.2);">
+        <div class="step-card" style="border-color:rgba(34,211,238,0.25);">
           <div class="step-badge text-cyan">Step 1 · Hardware Pull</div>
           <div class="step-title">Pull Records from Device</div>
           <div class="step-desc">
-            Connect over TCP to <span style="color:var(--cyan)" id="deviceAddrLabel">192.168.29.83:5005</span>,
-            retrieve all buffered punch EEPROM records, and filter by date before reviewing.
+            Connect over TCP socket to <span style="color:var(--cyan);font-weight:700" id="deviceAddrLabel">192.168.29.83:5005</span>,
+            fetch buffered punch EEPROM records, and preview gaps before cloud commit.
           </div>
           <button class="btn-step btn-step-pull" id="btnOpenDrawer">
             <i data-lucide="download" style="width:15px;height:15px" id="pullIcon"></i>
@@ -170,12 +178,12 @@
         </div>
 
         <!-- Step 2: Push -->
-        <div class="step-card" style="border-color:rgba(225,29,72,0.2);">
+        <div class="step-card" style="border-color:rgba(225,29,72,0.25);">
           <div class="step-badge text-red">Step 2 · Cloud Commit</div>
           <div class="step-title">Push Reviewed Data to Cloud</div>
           <div class="step-desc">
-            Send <strong id="pushCountDesc" style="color:var(--text-1)">0 records</strong> from the selected date filter to
-            <span style="color:var(--primary)" id="cloudLabel">https://kernn-hrms-internal.vercel.app</span>.
+            Send <strong id="pushCountDesc" style="color:var(--text-1)">0 records</strong> from the active date filter directly to
+            <span style="color:var(--rose);font-weight:600" id="cloudLabel">https://kernn-hrms-internal.vercel.app</span>.
           </div>
           <button class="btn-step btn-step-push" id="btnPushCloud" disabled>
             <i data-lucide="cloud-upload" style="width:15px;height:15px" id="pushIcon"></i>
@@ -191,40 +199,39 @@
             <i data-lucide="calendar-range" style="width:16px;height:16px;color:var(--cyan)"></i>
             Date Recovery Options
           </div>
-          <span style="font-size:11px;color:var(--text-2)">Select which calendar dates to extract from EEPROM</span>
+          <span style="font-size:11px;color:var(--text-2)">Select calendar mode to extract from biometric memory</span>
         </div>
         <div class="drawer-body">
           <div class="mode-pills">
             <button class="mode-pill active" data-mode="ALL">
-              <i data-lucide="layers" style="width:12px;height:12px"></i> All Missing Dates
+              <i data-lucide="layers" style="width:13px;height:13px"></i> All Missing Dates
             </button>
             <button class="mode-pill" data-mode="TODAY">
-              <i data-lucide="calendar" style="width:12px;height:12px"></i> Today Only
+              <i data-lucide="calendar" style="width:13px;height:13px"></i> Today Only
             </button>
             <button class="mode-pill" data-mode="RANGE">
-              <i data-lucide="sliders-horizontal" style="width:12px;height:12px"></i> Date Range
+              <i data-lucide="sliders-horizontal" style="width:13px;height:13px"></i> Custom Date Range
             </button>
           </div>
           <div class="date-range-row" id="rangeRow" style="display:none">
             <div class="field">
-              <label>From</label>
+              <label>From Date</label>
               <input type="date" id="rangeFrom">
             </div>
             <div class="field">
-              <label>To</label>
+              <label>To Date</label>
               <input type="date" id="rangeTo">
             </div>
           </div>
           <p style="font-size:11px;color:var(--text-3);line-height:1.6">
-            Data will be fetched from device memory only — nothing is pushed automatically.
-            Review the records first, then commit to cloud from the preview panel.
+            Data is fetched into local memory first. You can inspect records in the table below, filter by date chip, and commit when ready.
           </p>
         </div>
         <div class="drawer-footer">
           <button class="btn-ghost" onclick="closeDrawer()">Cancel</button>
           <button class="btn-execute" id="btnExecutePull">
             <i data-lucide="plug-zap" style="width:14px;height:14px"></i>
-            Connect & Fetch
+            Connect & Fetch Logs
           </button>
         </div>
       </div>
@@ -232,24 +239,24 @@
       <!-- Stats Row -->
       <div class="stats-row">
         <div class="stat-card">
-          <div class="stat-label">Terminal Device</div>
-          <div class="stat-val text-cyan" id="statDevice" style="font-size:13px;margin-top:4px">Secureye S-FB3K</div>
+          <div class="stat-label">Hardware Device</div>
+          <div class="stat-val text-cyan" id="statDevice" style="font-size:14px;margin-top:4px">Secureye S-FB3K</div>
           <div class="stat-note mono">SN: 102023050002456</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Records Pulled</div>
           <div class="stat-val text-green" id="statPunches">0</div>
-          <div class="stat-note">Ready for review</div>
+          <div class="stat-note">Buffered in memory</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Missing Dates</div>
+          <div class="stat-label">Calendar Dates</div>
           <div class="stat-val text-amber" id="statDays">0</div>
-          <div class="stat-note">Calendar gaps</div>
+          <div class="stat-note">Distinct days detected</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Socket Latency</div>
           <div class="stat-val text-violet" id="statPing">—</div>
-          <div class="stat-note">Port 5005</div>
+          <div class="stat-note">TCP Port 5005</div>
         </div>
       </div>
 
@@ -258,27 +265,38 @@
         <div class="deck-header">
           <div class="deck-tabs">
             <div class="deck-tab active" data-deck="dk-punches">
-              <i data-lucide="clipboard-list" style="width:13px;height:13px"></i>
+              <i data-lucide="clipboard-list" style="width:14px;height:14px"></i>
               Attendance Logs
               <span class="deck-tab-badge" id="dkBadgePunches">0</span>
             </div>
             <div class="deck-tab" data-deck="dk-users">
-              <i data-lucide="users" style="width:13px;height:13px"></i>
+              <i data-lucide="users" style="width:14px;height:14px"></i>
               Enrolled Staff
               <span class="deck-tab-badge" id="dkBadgeUsers">0</span>
             </div>
             <div class="deck-tab" data-deck="dk-audit">
-              <i data-lucide="shield-alert" style="width:13px;height:13px"></i>
-              Mgmt Audit
+              <i data-lucide="shield-alert" style="width:14px;height:14px"></i>
+              Management Audit
               <span class="deck-tab-badge" id="dkBadgeAudit">0</span>
             </div>
-            <div class="deck-tab" data-deck="dk-telemetry">
-              <i data-lucide="cpu" style="width:13px;height:13px"></i>
-              Telemetry
-            </div>
           </div>
-          <!-- Date filter chips -->
-          <div class="date-pills-row" id="datePillsRow"></div>
+
+          <!-- Deck Toolbar: Search, Date chips & Export -->
+          <div class="deck-toolbar">
+            <div class="date-pills-row" id="datePillsRow"></div>
+            <div class="search-input-wrap">
+              <i data-lucide="search" style="width:13px;height:13px"></i>
+              <input type="text" id="deckSearch" placeholder="Search staff or ID...">
+            </div>
+            <button class="action-tool-btn" id="btnExportCsv" title="Export table to CSV">
+              <i data-lucide="file-spreadsheet" style="width:13px;height:13px;color:var(--green)"></i>
+              <span>CSV</span>
+            </button>
+            <button class="action-tool-btn" id="btnExportJson" title="Export table to JSON">
+              <i data-lucide="file-code" style="width:13px;height:13px;color:var(--cyan)"></i>
+              <span>JSON</span>
+            </button>
+          </div>
         </div>
 
         <!-- Deck: Attendance Logs -->
@@ -287,8 +305,11 @@
             <table class="tbl">
               <thead>
                 <tr>
-                  <th>#</th><th>User ID</th><th>Staff Name</th><th>Timestamp</th>
-                  <th>Verify Mode</th>
+                  <th style="width:50px">#</th>
+                  <th style="width:140px">User ID</th>
+                  <th>Staff Name</th>
+                  <th>Timestamp</th>
+                  <th>Verification Mode</th>
                 </tr>
               </thead>
               <tbody id="tbPunches">
@@ -303,10 +324,10 @@
           <div class="push-panel" id="pushPanel" style="display:none">
             <div class="push-summary">
               Showing <strong id="shownCount">0</strong> of <strong id="totalCount">0</strong> records.
-              Filtered selection will be pushed to cloud.
+              Only this active filtered selection will be pushed to the cloud.
             </div>
             <button class="btn-push-now" id="btnPushNow" disabled>
-              <i data-lucide="cloud-upload" style="width:13px;height:13px"></i>
+              <i data-lucide="cloud-upload" style="width:14px;height:14px"></i>
               Push This Selection
             </button>
           </div>
@@ -318,12 +339,15 @@
             <table class="tbl">
               <thead>
                 <tr>
-                  <th>Dev ID</th><th>Name</th><th>Privilege</th>
-                  <th>Fingerprints</th><th>Face</th><th>Card</th>
+                  <th style="width:100px">User ID</th>
+                  <th>Staff Member</th>
+                  <th>Privilege Level</th>
+                  <th>Verification Capabilities</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody id="tbUsers">
-                <tr><td colspan="6" class="tbl-empty">Pull data to see enrolled staff profiles.</td></tr>
+                <tr><td colspan="5" class="tbl-empty">Pull data to see enrolled staff profiles.</td></tr>
               </tbody>
             </table>
           </div>
@@ -335,117 +359,92 @@
             <table class="tbl">
               <thead>
                 <tr>
-                  <th>Timestamp</th><th>Admin</th><th>Action</th><th>Target</th>
+                  <th>Timestamp</th>
+                  <th>Admin ID</th>
+                  <th>Action Category</th>
+                  <th>Description</th>
+                  <th>Target User</th>
                 </tr>
               </thead>
               <tbody id="tbAudit">
-                <tr><td colspan="4" class="tbl-empty">Pull data to see hardware management audit log.</td></tr>
+                <tr><td colspan="5" class="tbl-empty">Pull data to see hardware management audit logs.</td></tr>
               </tbody>
             </table>
           </div>
         </div>
-
-        <!-- Deck: Hardware Telemetry -->
-        <div class="deck-pane" id="dk-telemetry">
-          <div class="telemetry-grid">
-            <div class="tele-card">
-              <div class="tele-label">Terminal Model</div>
-              <div class="tele-val text-cyan">Secureye S-FB3K</div>
-              <div class="tele-sub">OEM: Realand SBXPC</div>
-            </div>
-            <div class="tele-card">
-              <div class="tele-label">Firmware</div>
-              <div class="tele-val text-green">SBXPC v4.8.21</div>
-              <div class="tele-sub">EEPROM Flash: 16 MB</div>
-            </div>
-            <div class="tele-card">
-              <div class="tele-label">Log Capacity</div>
-              <div class="tele-val text-amber">100,000</div>
-              <div class="tele-sub">Max punch records</div>
-            </div>
-            <div class="tele-card">
-              <div class="tele-label">Serial Number</div>
-              <div class="tele-val mono" style="font-size:13px">102023050002456</div>
-              <div class="tele-sub">Hardware identifier</div>
-            </div>
-            <div class="tele-card">
-              <div class="tele-label">Socket Latency</div>
-              <div class="tele-val text-violet" id="teleLatency">—</div>
-              <div class="tele-sub">TCP Port 5005</div>
-            </div>
-            <div class="tele-card">
-              <div class="tele-label">Protocol</div>
-              <div class="tele-val">Pure TCP</div>
-              <div class="tele-sub">No exe, no DLL</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Terminal -->
-      <div class="terminal">
-        <div class="term-head">
-          <div class="term-dots">
-            <span class="term-dot" style="background:#ef4444"></span>
-            <span class="term-dot" style="background:#f59e0b"></span>
-            <span class="term-dot" style="background:#10b981"></span>
-          </div>
-          <span style="font-size:10px;font-weight:700;color:var(--text-3);font-family:'JetBrains Mono',monospace">
-            RAW SOCKET MONITOR
-          </span>
-          <button id="btnClearTerm" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:10px;font-family:inherit">
-            Clear
-          </button>
-        </div>
-        <div class="term-body" id="termBody">
-          <div class="term-line"><span class="tc-ok">[AUTH]</span> Gateway ready. Waiting for hardware pull.</div>
-        </div>
       </div>
     </section>
 
-    <!-- ===== TAB: ATTENDANCE LOGS ===== -->
+    <!-- ===== TAB: ATTENDANCE LOGS (STANDALONE FULL VIEW) ===== -->
     <section id="tab-punches" class="tab-pane">
-      <div class="page-title">Attendance Logs</div>
-      <div class="page-sub">Full attendance punch history pulled from device EEPROM</div>
-      <div class="deck">
-        <div class="deck-header" style="padding:10px 14px">
-          <span style="font-size:12px;font-weight:700">All Pulled Punches</span>
-          <div class="flex-row">
-            <div class="field" style="margin:0"><input type="date" id="punchDateFilter" style="padding:5px 8px;font-size:11px"></div>
-            <button class="btn-ghost" style="padding:5px 12px;font-size:11px" id="btnFilterPunches">Filter</button>
-            <button class="btn-ghost" style="padding:5px 12px;font-size:11px" id="btnClearFilter">Clear</button>
+      <div class="deck" style="flex:1">
+        <div class="deck-header">
+          <div class="deck-tabs">
+            <div class="deck-tab active">
+              <i data-lucide="clipboard-list" style="width:14px;height:14px"></i>
+              Universal Punch Ledger
+            </div>
+          </div>
+          <div class="deck-toolbar">
+            <div class="search-input-wrap" style="width:260px">
+              <i data-lucide="search" style="width:13px;height:13px"></i>
+              <input type="text" id="fullSearch" placeholder="Filter by name, ID or date...">
+            </div>
+            <button class="action-tool-btn" id="btnExportFullCsv">
+              <i data-lucide="file-spreadsheet" style="width:13px;height:13px;color:var(--green)"></i>
+              <span>Export CSV</span>
+            </button>
           </div>
         </div>
-        <div class="tbl-wrap" style="max-height:450px">
+        <div class="tbl-wrap">
           <table class="tbl">
-            <thead><tr><th>#</th><th>User ID</th><th>Name</th><th>Timestamp</th><th>Mode</th></tr></thead>
+            <thead>
+              <tr>
+                <th style="width:50px">#</th>
+                <th style="width:140px">User ID</th>
+                <th>Staff Name</th>
+                <th>Punch Timestamp</th>
+                <th>Verify Mode</th>
+              </tr>
+            </thead>
             <tbody id="tbPunchesFull">
-              <tr><td colspan="5" class="tbl-empty">Pull records from Sync Hub first.</td></tr>
+              <tr><td colspan="5" class="tbl-empty">No records loaded yet. Pull logs from the Sync Hub first.</td></tr>
             </tbody>
           </table>
-        </div>
-        <div class="push-panel" id="pushPanelFull" style="display:none">
-          <div class="push-summary">
-            <strong id="shownCountFull">0</strong> records visible — push current view to cloud
-          </div>
-          <button class="btn-push-now" id="btnPushFull" disabled>
-            <i data-lucide="cloud-upload" style="width:13px;height:13px"></i>
-            Push Visible Records
-          </button>
         </div>
       </div>
     </section>
 
     <!-- ===== TAB: ENROLLED STAFF ===== -->
     <section id="tab-users" class="tab-pane">
-      <div class="page-title">Enrolled Staff Profiles</div>
-      <div class="page-sub">Biometric template registry from device memory</div>
-      <div class="deck">
-        <div class="tbl-wrap" style="max-height:480px">
+      <div class="deck" style="flex:1">
+        <div class="deck-header">
+          <div class="deck-tabs">
+            <div class="deck-tab active">
+              <i data-lucide="users" style="width:14px;height:14px"></i>
+              Biometric Enrolled Profiles
+            </div>
+          </div>
+          <div class="deck-toolbar">
+            <button class="action-tool-btn" id="btnFetchUsers">
+              <i data-lucide="refresh-cw" style="width:13px;height:13px;color:var(--cyan)"></i>
+              <span>Refresh Profiles</span>
+            </button>
+          </div>
+        </div>
+        <div class="tbl-wrap">
           <table class="tbl">
-            <thead><tr><th>Dev ID</th><th>Name</th><th>Privilege</th><th>Fingerprints</th><th>Face</th><th>Card No.</th></tr></thead>
+            <thead>
+              <tr>
+                <th style="width:100px">User ID</th>
+                <th>Staff Member</th>
+                <th>Privilege Level</th>
+                <th>Enrolled Biometrics</th>
+                <th>Status</th>
+              </tr>
+            </thead>
             <tbody id="tbUsersFull">
-              <tr><td colspan="6" class="tbl-empty">Pull data from Sync Hub to see enrolled profiles.</td></tr>
+              <tr><td colspan="5" class="tbl-empty">Pull records or click Refresh Profiles to load biometric users.</td></tr>
             </tbody>
           </table>
         </div>
@@ -454,14 +453,28 @@
 
     <!-- ===== TAB: HARDWARE AUDIT ===== -->
     <section id="tab-audit" class="tab-pane">
-      <div class="page-title">Hardware Management Audit Trail</div>
-      <div class="page-sub">Physical terminal supervisory log — menu access, settings and biometric operations</div>
-      <div class="deck">
-        <div class="tbl-wrap" style="max-height:480px">
+      <div class="deck" style="flex:1">
+        <div class="deck-header">
+          <div class="deck-tabs">
+            <div class="deck-tab active">
+              <i data-lucide="shield-check" style="width:14px;height:14px"></i>
+              Hardware Management Audit Trail
+            </div>
+          </div>
+        </div>
+        <div class="tbl-wrap">
           <table class="tbl">
-            <thead><tr><th>Timestamp</th><th>Admin</th><th>Action</th><th>Target</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Admin ID</th>
+                <th>Action Category</th>
+                <th>Description</th>
+                <th>Target</th>
+              </tr>
+            </thead>
             <tbody id="tbAuditFull">
-              <tr><td colspan="4" class="tbl-empty">Pull data from Sync Hub to see audit logs.</td></tr>
+              <tr><td colspan="5" class="tbl-empty">Hardware audit records will appear here after pull.</td></tr>
             </tbody>
           </table>
         </div>
@@ -470,25 +483,30 @@
 
     <!-- ===== TAB: NETWORK SCANNER ===== -->
     <section id="tab-scanner" class="tab-pane">
-      <div class="page-title">Network Device Scanner</div>
-      <div class="page-sub">Discover Secureye/ZKTeco biometric terminals on your local subnet</div>
-      <div class="settings-card" style="text-align:center;padding:32px">
-        <p style="font-size:12px;color:var(--text-2);margin-bottom:18px;max-width:400px;margin-left:auto;margin-right:auto;line-height:1.7">
-          Scans 192.168.x.x subnet for devices listening on port 5005.
-          Discovered terminals can be connected with one click.
-        </p>
-        <button class="btn-execute" id="btnStartScan" style="display:inline-flex;margin:0 auto">
-          <i data-lucide="search" style="width:14px;height:14px"></i> Start Network Sweep
+      <div class="step-card" style="margin-bottom:14px">
+        <div class="step-badge text-cyan">LAN Autodiscovery</div>
+        <div class="step-title">Scan Subnet for Secureye Biometric Terminals</div>
+        <div class="step-desc">
+          Probes your local network (192.168.29.1–254) on TCP port 5005 to discover online terminals automatically.
+        </div>
+        <button class="btn-step btn-step-pull" id="btnStartScan" style="max-width:240px">
+          <i data-lucide="search" style="width:15px;height:15px"></i>
+          Start Network Sweep
         </button>
       </div>
-      <div class="scan-card" id="scanResultsCard" style="display:none">
-        <div class="deck-header" style="padding:10px 14px">
-          <span style="font-size:12px;font-weight:700">Discovered Devices</span>
+
+      <div class="deck" id="scanResultsCard" style="display:none;flex:1">
+        <div class="deck-header">
+          <span style="font-size:12px;font-weight:700;color:#fff">Discovered Devices</span>
         </div>
         <div class="tbl-wrap">
           <table class="tbl">
-            <thead><tr><th>IP Address</th><th>Port</th><th>Protocol</th><th>Latency</th><th>Action</th></tr></thead>
-            <tbody id="tbScanner"></tbody>
+            <thead>
+              <tr><th>IP Address</th><th>Port</th><th>Protocol</th><th>Latency</th><th>Action</th></tr>
+            </thead>
+            <tbody id="tbScanner">
+              <tr><td colspan="5" class="tbl-empty">Ready to scan.</td></tr>
+            </tbody>
           </table>
         </div>
       </div>
@@ -496,61 +514,86 @@
 
     <!-- ===== TAB: SETTINGS ===== -->
     <section id="tab-settings" class="tab-pane">
-      <div class="page-title">Device & Cloud Settings</div>
-      <div class="page-sub">Configure terminal network address and cloud sync target</div>
-
-      <div class="settings-card">
-        <div class="settings-card-title">
-          <i data-lucide="network" style="width:16px;height:16px;color:var(--cyan)"></i>
-          Hardware Terminal Connection
-        </div>
-        <div class="settings-grid">
-          <div class="field"><label>Terminal IP Address</label><input type="text" id="cfgIp" value="192.168.29.83"></div>
-          <div class="field"><label>TCP Port</label><input type="number" id="cfgPort" value="5005"></div>
-          <div class="field"><label>Machine / Station ID</label><input type="number" id="cfgMachineId" value="1"></div>
-        </div>
-      </div>
-
-      <div class="settings-card">
-        <div class="settings-card-title">
-          <i data-lucide="cloud" style="width:16px;height:16px;color:var(--primary)"></i>
-          Cloud Sync Target
-        </div>
-        <div class="field">
-          <label>Cloud Server URL</label>
-          <input type="text" id="cfgCloudUrl" value="https://kernn-hrms-internal.vercel.app">
-        </div>
-      </div>
-
-      <div class="settings-card">
-        <div class="settings-card-title">
-          <i data-lucide="fingerprint" style="width:16px;height:16px;color:var(--cyan)"></i>
-          Device Passkey
-        </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-          <div>
-            <div style="font-size:12px;color:var(--text-2);line-height:1.6" id="passkeyStatus">
-              No passkey saved on this device.
+      <div class="steps-row">
+        <!-- Hardware Settings -->
+        <div class="step-card">
+          <div class="step-badge text-cyan">Hardware Config</div>
+          <div class="step-title">Secureye Terminal Address</div>
+          <div style="margin-top:14px">
+            <div class="field">
+              <label>Device IP Address</label>
+              <input type="text" id="cfgIp" value="192.168.29.83">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <div class="field">
+                <label>TCP Port</label>
+                <input type="number" id="cfgPort" value="5005">
+              </div>
+              <div class="field">
+                <label>Machine ID</label>
+                <input type="number" id="cfgMachineId" value="1">
+              </div>
             </div>
           </div>
-          <div style="display:flex;gap:8px">
-            <button class="btn-execute" id="btnRegisterPasskeySettings" style="white-space:nowrap">
-              <i data-lucide="plus-circle" style="width:14px;height:14px"></i> Register Passkey
-            </button>
-            <button class="btn-ghost" id="btnClearPasskeySettings" style="white-space:nowrap">Remove</button>
+        </div>
+
+        <!-- Cloud & Passkey -->
+        <div class="step-card">
+          <div class="step-badge text-red">Cloud & Security</div>
+          <div class="step-title">Server Target & Passkey</div>
+          <div style="margin-top:14px">
+            <div class="field">
+              <label>Target Cloud Endpoint</label>
+              <input type="text" id="cfgCloudUrl" value="https://kernn-hrms-internal.vercel.app">
+            </div>
+            <div style="padding:12px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:var(--radius-md);margin-bottom:14px">
+              <div style="font-size:11px;font-weight:700;color:var(--text-2);margin-bottom:4px;text-transform:uppercase">Passkey Status</div>
+              <div id="passkeyStatus" style="font-size:12px;color:var(--text-3);line-height:1.5">No passkey saved.</div>
+              <div style="display:flex;gap:8px;margin-top:10px">
+                <button class="action-tool-btn" id="btnRegisterPasskeySettings">
+                  <i data-lucide="fingerprint" style="width:13px;height:13px;color:var(--cyan)"></i>
+                  <span>Register Passkey</span>
+                </button>
+                <button class="action-tool-btn" id="btnClearPasskeySettings">
+                  <i data-lucide="trash-2" style="width:13px;height:13px;color:var(--rose)"></i>
+                  <span>Remove</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div style="text-align:right">
-        <button class="btn-primary" id="btnSaveSettings" style="width:auto;padding:10px 22px;display:inline-flex">
-          <i data-lucide="save" style="width:14px;height:14px"></i> Save Settings
+      <div style="display:flex;justify-content:flex-end;margin-top:10px">
+        <button class="btn-primary" id="btnSaveSettings" style="width:200px">
+          <i data-lucide="save" style="width:14px;height:14px"></i>
+          Save Configuration
         </button>
       </div>
     </section>
 
   </main>
 </div>
+
+<!-- ===== COLLAPSIBLE RAW SOCKET MONITOR DOCK ===== -->
+<footer class="term-dock collapsed" id="termDock">
+  <div class="term-dock-bar" id="termDockBar">
+    <div class="term-dock-title">
+      <i data-lucide="terminal" style="width:14px;height:14px;color:var(--cyan)"></i>
+      <span>Raw Socket Monitor</span>
+      <span class="badge badge-dim" id="termLogCount">Ready</span>
+    </div>
+    <div class="term-dock-controls">
+      <button class="term-btn" id="btnClearTerm" title="Clear terminal">
+        <i data-lucide="trash-2" style="width:13px;height:13px"></i>
+      </button>
+      <button class="term-btn" id="btnToggleTerm" title="Expand/Collapse">
+        <i data-lucide="chevron-up" id="termToggleIcon" style="width:14px;height:14px"></i>
+      </button>
+    </div>
+  </div>
+  <div class="term-body" id="termBody"></div>
+</footer>
 
 <script src="renderer.js"></script>
 </body>
