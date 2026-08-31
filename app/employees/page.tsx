@@ -37,6 +37,7 @@ import {
   RefreshCw,
   FileDown,
 } from 'lucide-react';
+import { generateCredentialPdf } from '@/lib/generate-credential-pdf';
 
 const DEPARTMENTS = [
   'ALL',
@@ -307,134 +308,20 @@ export default function EmployeesPage() {
     setTimeout(() => setCopiedPass(false), 2000);
   };
 
-  // Generate and download a branded Kernn credential PDF using Canvas
+  // Generate and download an executive branded Kernn credential PDF
   const handleDownloadCredentialPDF = () => {
     if (!createdCredentials) return;
     const { name, mobileNumber, employeeCode, temporaryPassword } = createdCredentials;
 
-    const canvas = document.createElement('canvas');
-    const dpr = window.devicePixelRatio || 1;
-    const W = 794, H = 520;  // A5-ish landscape
-    canvas.width  = W * dpr;
-    canvas.height = H * dpr;
-    canvas.style.width  = W + 'px';
-    canvas.style.height = H + 'px';
-    const ctx = canvas.getContext('2d')!;
-    ctx.scale(dpr, dpr);
-
-    // Background gradient
-    const bgGrad = ctx.createLinearGradient(0, 0, W, H);
-    bgGrad.addColorStop(0, '#0b1322');
-    bgGrad.addColorStop(1, '#0d1c35');
-    ctx.fillStyle = bgGrad;
-    ctx.fillRect(0, 0, W, H);
-
-    // Left accent strip
-    const stripGrad = ctx.createLinearGradient(0, 0, 0, H);
-    stripGrad.addColorStop(0, '#e11d48');
-    stripGrad.addColorStop(1, '#9f1239');
-    ctx.fillStyle = stripGrad;
-    ctx.fillRect(0, 0, 6, H);
-
-    // Top-right decorative circles
-    ctx.globalAlpha = 0.07;
-    ctx.fillStyle = '#e11d48';
-    ctx.beginPath(); ctx.arc(W, 0, 180, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(W - 60, H, 140, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 1;
-
-    // KERNN logo text
-    ctx.font = 'bold 28px Inter, Arial, sans-serif';
-    ctx.fillStyle = '#e11d48';
-    ctx.fillText('KERNN', 36, 56);
-
-    // Tagline
-    ctx.font = '11px Inter, Arial, sans-serif';
-    ctx.fillStyle = '#94a3b8';
-    ctx.fillText('Kernn HRMS · Automations · Secure Employee Portal', 36, 76);
-
-    // Horizontal divider
-    ctx.fillStyle = 'rgba(255,255,255,0.06)';
-    ctx.fillRect(36, 90, W - 72, 1);
-
-    // Title block
-    ctx.font = 'bold 15px Inter, Arial, sans-serif';
-    ctx.fillStyle = '#f0f4ff';
-    ctx.fillText('Employee Onboarding Credentials', 36, 122);
-    ctx.font = '11px Inter, Arial, sans-serif';
-    ctx.fillStyle = '#64748b';
-    ctx.fillText('CONFIDENTIAL — Share only with the employee. This document expires on first login.', 36, 142);
-
-    // Card background
-    ctx.fillStyle = 'rgba(255,255,255,0.04)';
-    roundRect(ctx, 36, 160, W - 72, 270, 14);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-    ctx.lineWidth = 1;
-    roundRect(ctx, 36, 160, W - 72, 270, 14);
-    ctx.stroke();
-
-    // Fields
-    const fields = [
-      { label: 'Full Name',          value: name },
-      { label: 'Employee Code',      value: employeeCode || 'EMP-001' },
-      { label: 'Mobile (Username)',   value: mobileNumber },
-      { label: 'Temporary Password', value: temporaryPassword, highlight: true },
-      { label: 'Portal URL',         value: 'https://hrms.kernn.ai' },
-    ];
-
-    let y = 195;
-    fields.forEach(({ label, value, highlight }) => {
-      ctx.font = '10px Inter, Arial, sans-serif';
-      ctx.fillStyle = '#64748b';
-      ctx.fillText(label.toUpperCase(), 60, y);
-      y += 18;
-
-      if (highlight) {
-        // Password pill background
-        ctx.fillStyle = 'rgba(225,29,72,0.12)';
-        roundRect(ctx, 58, y - 14, 320, 24, 6);
-        ctx.fill();
-        ctx.font = 'bold 13px "Courier New", monospace';
-        ctx.fillStyle = '#fb7185';
-        ctx.fillText(value, 68, y + 4);
-      } else {
-        ctx.font = 'bold 13px Inter, Arial, sans-serif';
-        ctx.fillStyle = '#e2e8f0';
-        ctx.fillText(value, 60, y + 4);
-      }
-      y += 36;
+    generateCredentialPdf({
+      type: 'NEW_EMPLOYEE',
+      employeeName: name,
+      employeeCode: employeeCode || 'EMP-001',
+      mobileNumber,
+      temporaryPassword,
+      portalUrl: 'https://hrms.kernn.ai',
     });
-
-    // Footer
-    ctx.fillStyle = 'rgba(255,255,255,0.04)';
-    ctx.fillRect(0, H - 46, W, 46);
-    ctx.font = '10px Inter, Arial, sans-serif';
-    ctx.fillStyle = '#475569';
-    const now = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-    ctx.fillText(`Generated: ${now} IST  ·  Kernn Automations Pvt. Ltd.  ·  noreply@kernn.ai`, 36, H - 18);
-
-    // Download
-    const link = document.createElement('a');
-    link.download = `Kernn_Credentials_${(name || 'Employee').replace(/\s+/g, '_')}.png`;
-    link.href = canvas.toDataURL('image/png', 1.0);
-    link.click();
   };
-
-  // Helper: rounded rect path
-  function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
-  }
 
   const handleExecuteResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -480,148 +367,15 @@ export default function EmployeesPage() {
     const { userName, mobileNumber, temporaryPassword } = resetResult;
     const employeeName = resettingEmployee?.name || userName || 'Employee';
 
-    const canvas = document.createElement('canvas');
-    const dpr = window.devicePixelRatio || 1;
-    const W = 794, H = 560;
-    canvas.width  = W * dpr;
-    canvas.height = H * dpr;
-    canvas.style.width  = W + 'px';
-    canvas.style.height = H + 'px';
-    const ctx = canvas.getContext('2d')!;
-    ctx.scale(dpr, dpr);
-
-    // Background
-    const bgGrad = ctx.createLinearGradient(0, 0, W, H);
-    bgGrad.addColorStop(0, '#0b1322');
-    bgGrad.addColorStop(1, '#0d1c35');
-    ctx.fillStyle = bgGrad;
-    ctx.fillRect(0, 0, W, H);
-
-    // Left accent strip — amber for reset
-    const stripGrad = ctx.createLinearGradient(0, 0, 0, H);
-    stripGrad.addColorStop(0, '#f59e0b');
-    stripGrad.addColorStop(1, '#b45309');
-    ctx.fillStyle = stripGrad;
-    ctx.fillRect(0, 0, 6, H);
-
-    // Decorative circles
-    ctx.globalAlpha = 0.07;
-    ctx.fillStyle = '#f59e0b';
-    ctx.beginPath(); ctx.arc(W, 0, 180, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.arc(W - 60, H, 140, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 1;
-
-    // ── RESET BANNER ──────────────────────────────────────────────────────
-    // Amber banner across the top
-    const bannerGrad = ctx.createLinearGradient(0, 0, W, 0);
-    bannerGrad.addColorStop(0, 'rgba(245,158,11,0.22)');
-    bannerGrad.addColorStop(1, 'rgba(245,158,11,0.05)');
-    ctx.fillStyle = bannerGrad;
-    ctx.fillRect(0, 0, W, 48);
-    ctx.fillStyle = 'rgba(245,158,11,0.5)';
-    ctx.fillRect(0, 47, W, 1);  // bottom border of banner
-
-    ctx.font = 'bold 12px Inter, Arial, sans-serif';
-    ctx.fillStyle = '#fbbf24';
-    ctx.fillText('⚠  PASSWORD RESET NOTICE  —  This replaces the employee\'s previous password', 36, 30);
-    // ─────────────────────────────────────────────────────────────────────
-
-    // KERNN logo
-    ctx.font = 'bold 26px Inter, Arial, sans-serif';
-    ctx.fillStyle = '#e11d48';
-    ctx.fillText('KERNN', 36, 82);
-
-    ctx.font = '11px Inter, Arial, sans-serif';
-    ctx.fillStyle = '#94a3b8';
-    ctx.fillText('Kernn HRMS · Automations · Secure Employee Portal', 36, 100);
-
-    ctx.fillStyle = 'rgba(255,255,255,0.06)';
-    ctx.fillRect(36, 114, W - 72, 1);
-
-    // Title
-    ctx.font = 'bold 15px Inter, Arial, sans-serif';
-    ctx.fillStyle = '#f0f4ff';
-    ctx.fillText('Admin Password Reset — Updated Credentials', 36, 146);
-    ctx.font = '11px Inter, Arial, sans-serif';
-    ctx.fillStyle = '#64748b';
-    ctx.fillText('CONFIDENTIAL — Share only with the employee. They must change this password on first login.', 36, 166);
-
-    // Card background
-    ctx.fillStyle = 'rgba(255,255,255,0.03)';
-    roundResetRect(ctx, 36, 182, W - 72, 290, 14);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(245,158,11,0.15)';
-    ctx.lineWidth = 1;
-    roundResetRect(ctx, 36, 182, W - 72, 290, 14);
-    ctx.stroke();
-
-    // Fields
-    const fields = [
-      { label: 'Full Name',          value: employeeName },
-      { label: 'Mobile (Username)',   value: mobileNumber },
-      { label: 'New Password',        value: temporaryPassword, highlight: true },
-      { label: 'Portal URL',          value: 'https://hrms.kernn.ai' },
-    ];
-
-    let y = 218;
-    fields.forEach(({ label, value, highlight }) => {
-      ctx.font = '10px Inter, Arial, sans-serif';
-      ctx.fillStyle = '#64748b';
-      ctx.fillText(label.toUpperCase(), 60, y);
-      y += 18;
-
-      if (highlight) {
-        ctx.fillStyle = 'rgba(245,158,11,0.12)';
-        roundResetRect(ctx, 58, y - 14, 320, 24, 6);
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(245,158,11,0.3)';
-        ctx.lineWidth = 0.5;
-        roundResetRect(ctx, 58, y - 14, 320, 24, 6);
-        ctx.stroke();
-        ctx.font = 'bold 13px "Courier New", monospace';
-        ctx.fillStyle = '#fbbf24';
-        ctx.fillText(value, 68, y + 4);
-      } else {
-        ctx.font = 'bold 13px Inter, Arial, sans-serif';
-        ctx.fillStyle = '#e2e8f0';
-        ctx.fillText(value, 60, y + 4);
-      }
-      y += 36;
+    generateCredentialPdf({
+      type: 'PASSWORD_RESET',
+      employeeName,
+      employeeCode: resettingEmployee?.employeeCode || 'EMP-001',
+      mobileNumber,
+      temporaryPassword,
+      portalUrl: 'https://hrms.kernn.ai',
     });
-
-    // Note box at bottom of card
-    ctx.font = 'italic 10px Inter, Arial, sans-serif';
-    ctx.fillStyle = '#f59e0b';
-    ctx.fillText('Note: This password was reset by an administrator. Employee will be required to change it on next login.', 60, y + 8);
-
-    // Footer
-    ctx.fillStyle = 'rgba(255,255,255,0.04)';
-    ctx.fillRect(0, H - 46, W, 46);
-    ctx.font = '10px Inter, Arial, sans-serif';
-    ctx.fillStyle = '#475569';
-    const now = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-    ctx.fillText(`Reset on: ${now} IST  ·  Kernn Automations Pvt. Ltd.  ·  noreply@kernn.ai`, 36, H - 18);
-
-    // Download
-    const link = document.createElement('a');
-    link.download = `Kernn_PasswordReset_${(employeeName).replace(/\s+/g, '_')}.png`;
-    link.href = canvas.toDataURL('image/png', 1.0);
-    link.click();
   };
-
-  function roundResetRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
-  }
 
   // Qualification item modifiers
   const addQualification = () => {
