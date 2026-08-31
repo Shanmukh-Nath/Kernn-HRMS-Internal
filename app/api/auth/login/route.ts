@@ -6,7 +6,9 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
-    const { mobileNumber, password } = await req.json();
+    const body = await req.json();
+    const mobileNumber = body.mobileNumber || body.mobile || body.username || body.userId;
+    const password = body.password;
 
     if (!mobileNumber || !password) {
       return NextResponse.json(
@@ -55,7 +57,9 @@ export async function POST(req: NextRequest) {
 
     const response = NextResponse.json({
       success: true,
+      token,
       data: {
+        token,
         user: sessionPayload,
         mustChangePassword: Boolean(user.mustChangePassword),
       },
