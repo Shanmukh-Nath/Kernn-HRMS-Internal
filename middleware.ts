@@ -10,6 +10,7 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/_next') ||
     pathname.startsWith('/api/auth/login') ||
     pathname.startsWith('/api/auth/logout') ||
+    pathname.startsWith('/api/auth/forgot-password') ||
     pathname.startsWith('/api/passkeys/login') ||
     pathname.startsWith('/api/passkeys/check') ||
     pathname.startsWith('/api/devices/sync/push') ||

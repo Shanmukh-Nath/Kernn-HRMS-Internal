@@ -39,6 +39,16 @@ export default function LoginPage() {
   const [changeLoading, setChangeLoading] = useState(false);
   const [changeError, setChangeError] = useState<string | null>(null);
 
+  // Forgot / Self-Reset Password Modal State
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotMobile, setForgotMobile] = useState('');
+  const [forgotPin, setForgotPin] = useState('');
+  const [forgotNewPass, setForgotNewPass] = useState('');
+  const [forgotConfirmPass, setForgotConfirmPass] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [forgotSuccess, setForgotSuccess] = useState<string | null>(null);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const dev = detectClientDevice();
@@ -172,6 +182,52 @@ export default function LoginPage() {
     }
   };
 
+  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError(null);
+    setForgotSuccess(null);
+
+    if (forgotNewPass.length < 6) {
+      setForgotError('New password must be at least 6 characters long');
+      return;
+    }
+
+    if (forgotNewPass !== forgotConfirmPass) {
+      setForgotError('Passwords do not match');
+      return;
+    }
+
+    setForgotLoading(true);
+    try {
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mobileNumber: forgotMobile,
+          recoveryPin: forgotPin,
+          newPassword: forgotNewPass,
+          confirmPassword: forgotConfirmPass,
+        }),
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        setForgotSuccess(json.message || 'Password successfully reset! You can now log in.');
+        setMobileNumber(forgotMobile);
+        setPassword(forgotNewPass);
+        setTimeout(() => {
+          setShowForgotModal(false);
+        }, 2000);
+      } else {
+        setForgotError(json.error?.message || 'Password reset failed');
+      }
+    } catch {
+      setForgotError('Network error while resetting password');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden">
       {/* Background Decorative Gradients using Kernn #a92427 */}
@@ -270,9 +326,22 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Password
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Password
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForgotModal(true);
+                    setForgotError(null);
+                    setForgotSuccess(null);
+                  }}
+                  className="text-xs font-semibold text-[#a92427] hover:underline"
+                >
+                  Forgot / Reset?
+                </button>
+              </div>
               <div className="relative">
                 <Lock className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" />
                 <input
@@ -429,6 +498,111 @@ export default function LoginPage() {
                 className="w-full py-3.5 px-4 rounded-xl bg-[#a92427] hover:bg-[#8e1d20] text-white font-bold text-sm shadow-lg shadow-[#a92427]/25 transition flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 <span>{changeLoading ? 'Updating Password...' : 'Save & Proceed to Dashboard'}</span>
+                <CheckCircle2 className="w-4 h-4" />
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Forgot Password / Self-Reset Lightbox Modal */}
+      {showForgotModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-8 shadow-2xl space-y-6 animate-scaleUp relative">
+            <button
+              onClick={() => setShowForgotModal(false)}
+              className="absolute top-6 right-6 p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 rounded-2xl bg-[#a92427]/10 text-[#a92427] mx-auto flex items-center justify-center font-bold">
+                <KeyRound className="w-6 h-6" />
+              </div>
+              <h2 className="text-lg font-bold text-slate-900">Reset Account Password</h2>
+              <p className="text-xs text-slate-500">
+                Enter your registered mobile number and your Administrator Master Recovery PIN (e.g. <code>888999</code>) to set a new password.
+              </p>
+            </div>
+
+            {forgotError && (
+              <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-600" />
+                <span>{forgotError}</span>
+              </div>
+            )}
+
+            {forgotSuccess && (
+              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 flex-shrink-0 text-emerald-600" />
+                <span>{forgotSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Registered Mobile Number
+                </label>
+                <input
+                  type="tel"
+                  placeholder="e.g. 9876543210"
+                  value={forgotMobile}
+                  onChange={(e) => setForgotMobile(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-900 focus:ring-2 focus:ring-[#a92427] focus:border-[#a92427] focus:outline-none font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Recovery PIN / Admin Key
+                </label>
+                <input
+                  type="password"
+                  placeholder="Master PIN (e.g. 888999)"
+                  value={forgotPin}
+                  onChange={(e) => setForgotPin(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-900 focus:ring-2 focus:ring-[#a92427] focus:border-[#a92427] focus:outline-none font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  placeholder="Min 6 characters"
+                  value={forgotNewPass}
+                  onChange={(e) => setForgotNewPass(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-900 focus:ring-2 focus:ring-[#a92427] focus:border-[#a92427] focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Confirm New Password
+                </label>
+                <input
+                  type="password"
+                  placeholder="Re-type new password"
+                  value={forgotConfirmPass}
+                  onChange={(e) => setForgotConfirmPass(e.target.value)}
+                  required
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 text-sm text-slate-900 focus:ring-2 focus:ring-[#a92427] focus:border-[#a92427] focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={forgotLoading}
+                className="w-full py-3.5 px-4 rounded-xl bg-[#a92427] hover:bg-[#8e1d20] text-white font-bold text-sm shadow-lg shadow-[#a92427]/25 transition flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <span>{forgotLoading ? 'Resetting Password...' : 'Reset & Save Password'}</span>
                 <CheckCircle2 className="w-4 h-4" />
               </button>
             </form>

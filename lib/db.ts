@@ -141,18 +141,29 @@ export async function findUserById(id: string) {
 }
 
 
-export async function updateUserPassword(userId: string, passwordHash: string) {
-  const users = await usersCol();
-  await users.updateOne(
-    { $or: [{ id: userId }, { _id: userId }] },
-    {
-      $set: {
-        passwordHash,
-        mustChangePassword: false,
-        updatedAt: new Date(),
-      },
-    }
-  );
+export async function updateUserPassword(userId: string, passwordHash: string, mustChangePassword = false) {
+  try {
+    const users = await usersCol();
+    await users.updateOne(
+      { $or: [{ id: userId }, { _id: userId }] },
+      {
+        $set: {
+          passwordHash,
+          mustChangePassword,
+          updatedAt: new Date(),
+        },
+      }
+    );
+  } catch (mongoErr) {
+    const { DatabaseSync } = require('node:sqlite');
+    const path = require('path');
+    const db = new DatabaseSync(path.join(process.cwd(), 'prisma', 'dev.db'));
+    db.prepare(`UPDATE User SET passwordHash = ?, mustChangePassword = ?, updatedAt = datetime('now') WHERE id = ?`).run(
+      passwordHash,
+      mustChangePassword ? 1 : 0,
+      userId
+    );
+  }
 }
 
 // ----------------------------------------------------
