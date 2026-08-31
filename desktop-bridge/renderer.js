@@ -110,6 +110,9 @@ function log(type, msg) {
   tb.scrollTop = tb.scrollHeight;
 }
 
+let _dockHeight = 180;
+let _dockMaximized = false;
+
 function toggleTerminalDock(forceOpen = false) {
   const dock = $('termDock');
   const icon = $('termToggleIcon');
@@ -121,11 +124,99 @@ function toggleTerminalDock(forceOpen = false) {
     state.termCollapsed = !state.termCollapsed;
   }
 
-  dock.classList.toggle('collapsed', state.termCollapsed);
+  if (state.termCollapsed) {
+    dock.classList.add('collapsed');
+    dock.style.height = '36px';
+  } else {
+    dock.classList.remove('collapsed');
+    dock.style.height = `${_dockHeight}px`;
+  }
+
   if (icon) {
     icon.setAttribute('data-lucide', state.termCollapsed ? 'chevron-up' : 'chevron-down');
     reIcons();
   }
+}
+
+function toggleMaximizeDock() {
+  const dock = $('termDock');
+  const maxIcon = $('termMaxIcon');
+  if (!dock) return;
+
+  _dockMaximized = !_dockMaximized;
+  if (_dockMaximized) {
+    state.termCollapsed = false;
+    dock.classList.remove('collapsed');
+    const fullHeight = Math.min(Math.round(window.innerHeight * 0.72), window.innerHeight - 80);
+    dock.style.height = `${fullHeight}px`;
+  } else {
+    dock.style.height = `${_dockHeight}px`;
+  }
+
+  if (maxIcon) {
+    maxIcon.setAttribute('data-lucide', _dockMaximized ? 'minimize-2' : 'maximize-2');
+    reIcons();
+  }
+}
+
+function initDockResizer() {
+  const resizer = $('termResizer');
+  const dock = $('termDock');
+  if (!resizer || !dock) return;
+
+  let isDragging = false;
+  let startY = 0;
+  let startHeight = 0;
+
+  const onMouseDown = (e) => {
+    isDragging = true;
+    startY = e.clientY;
+    startHeight = dock.offsetHeight;
+    dock.classList.add('is-resizing');
+    document.body.style.cursor = 'row-resize';
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+    e.preventDefault();
+  };
+
+  const onMouseMove = (e) => {
+    if (!isDragging) return;
+    const deltaY = startY - e.clientY;
+    let newHeight = startHeight + deltaY;
+
+    // Minimum 36px, Maximum 80% of window
+    const maxHeight = window.innerHeight - 90;
+    if (newHeight > maxHeight) newHeight = maxHeight;
+
+    if (newHeight < 60) {
+      state.termCollapsed = true;
+      dock.classList.add('collapsed');
+      dock.style.height = '36px';
+    } else {
+      state.termCollapsed = false;
+      dock.classList.remove('collapsed');
+      dock.style.height = `${newHeight}px`;
+      _dockHeight = newHeight;
+      _dockMaximized = false;
+    }
+
+    const toggleIcon = $('termToggleIcon');
+    if (toggleIcon) {
+      toggleIcon.setAttribute('data-lucide', state.termCollapsed ? 'chevron-up' : 'chevron-down');
+      reIcons();
+    }
+  };
+
+  const onMouseUp = () => {
+    if (!isDragging) return;
+    isDragging = false;
+    dock.classList.remove('is-resizing');
+    document.body.style.cursor = '';
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+  };
+
+  resizer.addEventListener('mousedown', onMouseDown);
 }
 
 // ─── Auth Error Display ──────────────────────────────────────────────────────
@@ -727,12 +818,15 @@ function initApp() {
   const rf = $('rangeFrom'); if (rf) rf.value = week;
   const rt = $('rangeTo');   if (rt) rt.value = today;
 
-  // Terminal Dock
+  // Terminal Dock & Height Resizer
+  initDockResizer();
+
   $('termDockBar')?.addEventListener('click', (e) => {
-    if (e.target.closest('#btnClearTerm')) return;
+    if (e.target.closest('#btnClearTerm') || e.target.closest('#btnMaxTerm')) return;
     toggleTerminalDock();
   });
   $('btnToggleTerm')?.addEventListener('click', () => toggleTerminalDock());
+  $('btnMaxTerm')?.addEventListener('click', () => toggleMaximizeDock());
   $('btnClearTerm')?.addEventListener('click', () => {
     const tb = $('termBody');
     if (tb) tb.innerHTML = '';

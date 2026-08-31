@@ -621,16 +621,24 @@
   </main>
 </div>
 
-<!-- ===== COLLAPSIBLE RAW SOCKET MONITOR DOCK ===== -->
+<!-- ===== RESIZABLE & COLLAPSIBLE RAW SOCKET & EVENT MONITOR DOCK ===== -->
 <footer class="term-dock collapsed" id="termDock">
+  <!-- Draggable Height Resizer Handle -->
+  <div class="term-resizer" id="termResizer" title="Drag up or down to resize event monitor">
+    <div class="term-resizer-grip"></div>
+  </div>
+
   <div class="term-dock-bar" id="termDockBar">
     <div class="term-dock-title">
       <i data-lucide="terminal" style="width:14px;height:14px;color:var(--cyan)"></i>
-      <span>Raw Socket Monitor</span>
+      <span>Raw Socket & Event Monitor</span>
       <span class="badge badge-dim" id="termLogCount">Ready</span>
     </div>
     <div class="term-dock-controls">
-      <button class="term-btn" id="btnClearTerm" title="Clear terminal">
+      <button class="term-btn" id="btnMaxTerm" title="Expand to view all events">
+        <i data-lucide="maximize-2" id="termMaxIcon" style="width:13px;height:13px"></i>
+      </button>
+      <button class="term-btn" id="btnClearTerm" title="Clear terminal events">
         <i data-lucide="trash-2" style="width:13px;height:13px"></i>
       </button>
       <button class="term-btn" id="btnToggleTerm" title="Expand/Collapse">
