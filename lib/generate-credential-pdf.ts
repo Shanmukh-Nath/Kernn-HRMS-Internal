@@ -1,6 +1,6 @@
 /**
  * Official Corporate Credential & Password Reset PDF Generator
- * Generates an executive A4 PDF with security branding and instructions.
+ * Generates an executive vector A4 PDF with security branding and clickable portal hyperlinks.
  */
 
 import { jsPDF } from 'jspdf';
@@ -24,7 +24,8 @@ export function generateCredentialPdf(data: CredentialPdfData) {
   });
 
   const isReset = data.type === 'PASSWORD_RESET';
-  const portalUrl = data.portalUrl || 'https://hrms.kernn.ai';
+  const targetUrl = 'https://hrms.kernn.ai';
+  const displayUrl = 'hrms.kernn.ai';
   const issuedDate = (data.issuedAt || new Date()).toLocaleString('en-IN', {
     timeZone: 'Asia/Kolkata',
     dateStyle: 'medium',
@@ -33,8 +34,8 @@ export function generateCredentialPdf(data: CredentialPdfData) {
   const refCode = `KRN-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
   // Page width 210mm, height 297mm
-  const margin = 20;
-  const contentWidth = 210 - margin * 2; // 170mm
+  const margin = 18;
+  const contentWidth = 210 - margin * 2; // 174mm
 
   // ─── 1. TOP CORPORATE HEADER ──────────────────────────────────────────────
   // Dark navy background header banner
@@ -66,122 +67,145 @@ export function generateCredentialPdf(data: CredentialPdfData) {
   if (isReset) {
     doc.setFillColor(245, 158, 11);
     doc.setTextColor(11, 19, 34);
-    doc.roundedRect(140, 12, 50, 8, 2, 2, 'F');
+    doc.roundedRect(138, 12, 54, 8, 2, 2, 'F');
     doc.text('PASSWORD RESET NOTICE', 165, 17.5, { align: 'center' });
   } else {
     doc.setFillColor(225, 29, 72);
     doc.setTextColor(255, 255, 255);
-    doc.roundedRect(140, 12, 50, 8, 2, 2, 'F');
+    doc.roundedRect(138, 12, 54, 8, 2, 2, 'F');
     doc.text('OFFICIAL CREDENTIALS', 165, 17.5, { align: 'center' });
   }
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(148, 163, 184);
-  doc.text(`REF: ${refCode}`, 190, 26, { align: 'right' });
-  doc.text(`ISSUED: ${issuedDate} IST`, 190, 31, { align: 'right' });
+  doc.text(`REF: ${refCode}`, 192, 26, { align: 'right' });
+  doc.text(`ISSUED: ${issuedDate} IST`, 192, 31, { align: 'right' });
 
   // ─── 2. NOTICE / CONFIDENTIALITY BANNER ──────────────────────────────────
-  let y = 52;
+  let y = 48;
   if (isReset) {
     // Amber banner
     doc.setFillColor(254, 243, 199); // light amber
     doc.setDrawColor(245, 158, 11); // amber border
     doc.setLineWidth(0.5);
-    doc.roundedRect(margin, y, contentWidth, 18, 3, 3, 'FD');
+    doc.roundedRect(margin, y, contentWidth, 16, 2.5, 2.5, 'FD');
 
     doc.setTextColor(180, 83, 9); // dark amber
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
-    doc.text('CONFIDENTIAL: ADMINISTRATOR PASSWORD RESET', margin + 6, y + 6.5);
+    doc.setFontSize(9);
+    doc.text('CONFIDENTIAL: ADMINISTRATOR PASSWORD RESET', margin + 5, y + 5.5);
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
+    doc.setFontSize(7.8);
     doc.setTextColor(120, 53, 15);
     doc.text(
       'An administrator has updated the security credentials for this account. Previous passwords have been invalidated.',
-      margin + 6,
-      y + 12.5
+      margin + 5,
+      y + 11.5
     );
   } else {
-    // Rose / Blue banner
+    // Rose / Slate banner
     doc.setFillColor(241, 245, 249); // slate 100
     doc.setDrawColor(203, 213, 225); // slate 300
     doc.setLineWidth(0.5);
-    doc.roundedRect(margin, y, contentWidth, 18, 3, 3, 'FD');
+    doc.roundedRect(margin, y, contentWidth, 16, 2.5, 2.5, 'FD');
 
     doc.setTextColor(15, 23, 42); // slate 900
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
-    doc.text('CONFIDENTIAL: NEW EMPLOYEE ONBOARDING ACCESS', margin + 6, y + 6.5);
+    doc.setFontSize(9);
+    doc.text('CONFIDENTIAL: NEW EMPLOYEE ONBOARDING ACCESS', margin + 5, y + 5.5);
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
+    doc.setFontSize(7.8);
     doc.setTextColor(71, 85, 105);
     doc.text(
       'This document contains private access credentials. Please share securely with the employee only.',
-      margin + 6,
-      y + 12.5
+      margin + 5,
+      y + 11.5
     );
   }
 
   // ─── 3. CREDENTIAL DETAILS CARD ──────────────────────────────────────────
-  y = 78;
+  y = 70;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
+  doc.setFontSize(12);
   doc.setTextColor(15, 23, 42);
   doc.text('Account Authentication Details', margin, y);
 
-  y += 6;
+  y += 5;
+  const cardHeight = 78;
   // Card Container
   doc.setFillColor(248, 250, 252); // slate 50
   doc.setDrawColor(226, 232, 240); // slate 200
   doc.setLineWidth(0.5);
-  doc.roundedRect(margin, y, contentWidth, 76, 4, 4, 'FD');
+  doc.roundedRect(margin, y, contentWidth, cardHeight, 3.5, 3.5, 'FD');
 
-  const fields = [
-    { label: 'EMPLOYEE NAME', val: data.employeeName || 'Staff Member' },
-    { label: 'EMPLOYEE CODE', val: data.employeeCode || 'EMP-001' },
-    { label: 'LOGIN USERNAME (MOBILE)', val: data.mobileNumber || '—' },
-    { label: 'PORTAL WEB ADDRESS', val: portalUrl },
-  ];
+  const col1X = margin + 8;
+  const col2X = margin + 92;
 
-  let fy = y + 10;
-  fields.forEach((f) => {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(7.5);
-    doc.setTextColor(100, 116, 139); // slate 500
-    doc.text(f.label, margin + 8, fy);
+  // Row 1: Name & Code
+  const r1Y = y + 10;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text('EMPLOYEE FULL NAME', col1X, r1Y);
+  doc.text('EMPLOYEE CODE', col2X, r1Y);
 
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(10.5);
-    doc.setTextColor(15, 23, 42); // slate 900
-    doc.text(f.val, margin + 8, fy + 5.5);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text(data.employeeName || 'Staff Member', col1X, r1Y + 5.5);
+  doc.text(data.employeeCode || 'EMP-001', col2X, r1Y + 5.5);
 
-    fy += 13.5;
-  });
+  // Row 2: Mobile Username & Clickable Portal Hyperlink
+  const r2Y = y + 26;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text('LOGIN USERNAME (MOBILE)', col1X, r2Y);
+  doc.text('PORTAL WEB ADDRESS', col2X, r2Y);
 
-  // Password Special Highlight Box
-  const passBoxY = y + 54;
-  doc.setFillColor(isReset ? 254 : 255, isReset ? 242 : 241, isReset ? 242 : 242);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text(data.mobileNumber || '—', col1X, r2Y + 5.5);
+
+  // Clickable Portal Link (hrms.kernn.ai)
+  doc.setTextColor(2, 132, 199); // Electric Cyan / Blue
+  doc.textWithLink(displayUrl, col2X, r2Y + 5.5, { url: targetUrl });
+  // Underline for the hyperlink
+  doc.setDrawColor(2, 132, 199);
+  doc.setLineWidth(0.3);
+  doc.line(col2X, r2Y + 6.5, col2X + 28, r2Y + 6.5);
+
+  // Row 3: Dedicated Prominent Password Box (No overlap)
+  const passBoxY = y + 43;
+  const passBoxHeight = 26;
+  doc.setFillColor(isReset ? 255 : 255, isReset ? 251 : 241, isReset ? 235 : 242);
   doc.setDrawColor(isReset ? 245 : 225, isReset ? 158 : 29, isReset ? 11 : 72);
   doc.setLineWidth(0.8);
-  doc.roundedRect(margin + 8, passBoxY, contentWidth - 16, 16, 3, 3, 'FD');
+  doc.roundedRect(margin + 6, passBoxY, contentWidth - 12, passBoxHeight, 3, 3, 'FD');
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(7.5);
   doc.setTextColor(isReset ? 180 : 159, isReset ? 83 : 18, isReset ? 9 : 57);
-  doc.text('TEMPORARY SECURITY PASSWORD', margin + 14, passBoxY + 5.5);
+  doc.text('TEMPORARY SECURITY PASSWORD', margin + 12, passBoxY + 7);
 
   doc.setFont('courier', 'bold');
-  doc.setFontSize(12);
+  doc.setFontSize(13.5);
   doc.setTextColor(isReset ? 180 : 225, isReset ? 83 : 29, isReset ? 9 : 72);
-  doc.text(data.temporaryPassword || '••••••••', margin + 14, passBoxY + 11.5);
+  doc.text(data.temporaryPassword || '••••••••', margin + 12, passBoxY + 16);
+
+  doc.setFont('helvetica', 'italic');
+  doc.setFontSize(7.2);
+  doc.setTextColor(100, 116, 139);
+  doc.text('Must be changed upon your initial login', margin + 12, passBoxY + 22);
 
   // ─── 4. SECURITY & LOGIN INSTRUCTIONS ────────────────────────────────────
-  y = 168;
+  y = 160;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
+  doc.setFontSize(11.5);
   doc.setTextColor(15, 23, 42);
   doc.text('First-Time Login & Security Instructions', margin, y);
 
@@ -189,23 +213,26 @@ export function generateCredentialPdf(data: CredentialPdfData) {
   const steps = [
     {
       num: '1',
-      title: 'Access the Portal',
-      desc: `Open your web browser and navigate to ${portalUrl}`,
+      title: 'Access the Portal via Web Browser',
+      desc: 'Open your web browser and click ',
+      link: displayUrl,
+      url: targetUrl,
+      post: ' to access the secure login gateway.',
     },
     {
       num: '2',
-      title: 'Enter Initial Credentials',
-      desc: `Use your registered mobile number (${data.mobileNumber}) as the username and the temporary password above.`,
+      title: 'Enter Initial Account Credentials',
+      desc: `Input your registered mobile number (${data.mobileNumber}) as the User ID along with the temporary password above.`,
     },
     {
       num: '3',
       title: 'Mandatory Password Update',
-      desc: 'You will be prompted immediately to create a new, strong personal password (minimum 8 characters).',
+      desc: 'The system will immediately prompt you to set a private, permanent password (minimum 8 characters).',
     },
     {
       num: '4',
       title: 'Enable Device Passkey (Recommended)',
-      desc: 'On the desktop bridge app, enable Passkey for instant 1-click biometric authentication on your machine.',
+      desc: 'On the desktop bridge app, enable Passkey for instant 1-click biometric sign-in without typing passwords.',
     },
   ];
 
@@ -218,22 +245,36 @@ export function generateCredentialPdf(data: CredentialPdfData) {
     doc.setFontSize(7.5);
     doc.text(st.num, margin + 4, y + 4.7, { align: 'center' });
 
-    // Step title & desc
+    // Step title
     doc.setTextColor(15, 23, 42);
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.text(st.title, margin + 12, y + 2.5);
+    doc.setFontSize(8.8);
+    doc.text(st.title, margin + 11, y + 2.5);
 
+    // Step description with optional hyperlink
     doc.setTextColor(100, 116, 139);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text(st.desc, margin + 12, y + 7);
+    doc.setFontSize(7.8);
 
-    y += 13.5;
+    if (st.link && st.url) {
+      doc.text(st.desc, margin + 11, y + 7);
+      const linkX = margin + 11 + doc.getTextWidth(st.desc);
+      doc.setTextColor(2, 132, 199);
+      doc.setFont('helvetica', 'bold');
+      doc.textWithLink(st.link, linkX, y + 7, { url: st.url });
+      const postX = linkX + doc.getTextWidth(st.link);
+      doc.setTextColor(100, 116, 139);
+      doc.setFont('helvetica', 'normal');
+      doc.text(st.post || '', postX, y + 7);
+    } else {
+      doc.text(st.desc, margin + 11, y + 7);
+    }
+
+    y += 13;
   });
 
   // ─── 5. COMPLIANCE & SECURITY WARNING BOX ────────────────────────────────
-  y = 232;
+  y = 224;
   doc.setFillColor(248, 250, 252);
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.5);
@@ -248,7 +289,7 @@ export function generateCredentialPdf(data: CredentialPdfData) {
   doc.setFontSize(7.2);
   doc.setTextColor(100, 116, 139);
   doc.text(
-    'Kernn HRMS enforces strict end-to-end access isolation. Never share or forward this document via public messaging\napps or unverified emails. If you did not request or expect this credential change, contact your HR or IT Administrator immediately.',
+    'Kernn HRMS enforces strict end-to-end access isolation. Never share or forward this document via public messaging\napps or unverified channels. If you did not request or expect this credential change, contact your HR or IT Administrator immediately.',
     margin + 6,
     y + 11.5
   );
@@ -260,7 +301,12 @@ export function generateCredentialPdf(data: CredentialPdfData) {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
   doc.setTextColor(148, 163, 184);
-  doc.text('Kernn Automations Pvt. Ltd. · Enterprise Workforce Security · https://kernn.ai', margin, 280);
+  doc.text('Kernn Automations Pvt. Ltd. · Enterprise Workforce Security · ', margin, 280);
+  const footLinkX = margin + doc.getTextWidth('Kernn Automations Pvt. Ltd. · Enterprise Workforce Security · ');
+  doc.setTextColor(2, 132, 199);
+  doc.textWithLink(displayUrl, footLinkX, 280, { url: targetUrl });
+
+  doc.setTextColor(148, 163, 184);
   doc.text('STRICTLY CONFIDENTIAL · PAGE 1 OF 1', 210 - margin, 280, { align: 'right' });
 
   // ─── 7. SAVE / TRIGGER DOWNLOAD ───────────────────────────────────────────
