@@ -1,41 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { DatabaseSync } from 'node:sqlite';
-import path from 'path';
 import { getAuthSession, hasPermission } from '@/lib/auth';
+import { hardwareAuditLogsCol, generateId } from '@/lib/mongodb';
 
 export const dynamic = 'force-dynamic';
-
-function getDb() {
-  const dbPath = path.join(process.cwd(), 'prisma', 'dev.db');
-  const db = new DatabaseSync(dbPath);
-
-  // Ensure HardwareAuditLog table exists
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS HardwareAuditLog (
-      id TEXT PRIMARY KEY,
-      deviceId TEXT NOT NULL,
-      adminUserId TEXT NOT NULL,
-      adminName TEXT,
-      actionCode INTEGER NOT NULL,
-      actionCategory TEXT NOT NULL,
-      actionDescription TEXT NOT NULL,
-      targetUserId TEXT,
-      targetName TEXT,
-      timestamp TEXT NOT NULL,
-      rawPayload TEXT,
-      createdAt TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_hw_audit_time ON HardwareAuditLog(timestamp);
-    CREATE INDEX IF NOT EXISTS idx_hw_audit_admin ON HardwareAuditLog(adminUserId);
-    CREATE INDEX IF NOT EXISTS idx_hw_audit_cat ON HardwareAuditLog(actionCategory);
-  `);
-
-  return db;
-}
-
-function cuid(): string {
-  return 'hwal_' + Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
-}
 
 function categorizeAction(code: number): { category: string; description: string } {
   switch (code) {
@@ -58,101 +25,69 @@ function categorizeAction(code: number): { category: string; description: string
     case 9:
       return { category: 'DELETION', description: 'Deleted Password PIN' };
     case 10:
-      return { category: 'DELETION', description: 'Deleted RFID Card' };
+      return { category: 'DELETION', description: 'Deleted RFID Smart Card' };
     case 11:
-      return { category: 'DELETION', description: 'Deleted Face Recognition Data' };
+      return { category: 'DELETION', description: 'Deleted Face Recognition Profile' };
     case 12:
-      return { category: 'MEMORY_WIPE', description: 'Cleared Attendance Log Memory (GLog)' };
+      return { category: 'MEMORY_WIPE', description: 'Cleared All Attendance Records from EEPROM' };
     case 13:
-      return { category: 'MEMORY_WIPE', description: 'Cleared All User Data / Factory Reset' };
+      return { category: 'MEMORY_WIPE', description: 'Cleared All User Profiles from EEPROM' };
     case 14:
-      return { category: 'TIME_SYNC', description: 'Adjusted Device Internal Clock / Time' };
+      return { category: 'CONFIG_CHANGE', description: 'Restored Device to Factory Defaults' };
     case 15:
-      return { category: 'CONFIG_CHANGE', description: 'Modified Network / IP / Socket Config' };
-    case 16:
-      return { category: 'CONFIG_CHANGE', description: 'Changed User Admin Privilege Level' };
+      return { category: 'TIME_SYNC', description: 'Updated Real-Time Clock (RTC) / NTP Time' };
     default:
-      return { category: 'SYSTEM_EVENT', description: `Terminal Event Code ${code}` };
+      return { category: 'SYSTEM_OP', description: `Terminal Hardware Operation (Code 0x${code.toString(16).toUpperCase()})` };
   }
 }
 
 export async function GET(req: NextRequest) {
   try {
     const session = await getAuthSession();
-    // Allow SUPER_ADMIN or users with settings/device permissions
-    if (session && session.role !== 'SUPER_ADMIN' && !hasPermission(session, 'settings:read')) {
-      return NextResponse.json(
-        { success: false, error: { code: 'FORBIDDEN', message: 'Only Super Administrators can inspect hardware audit logs.' } },
-        { status: 403 }
-      );
+    if (!session) {
+      return NextResponse.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } }, { status: 401 });
     }
 
-    const { searchParams } = req.nextUrl;
+    const { searchParams } = new URL(req.url);
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const adminUserId = searchParams.get('adminUserId');
     const actionCategory = searchParams.get('actionCategory');
     const search = searchParams.get('search');
     const format = searchParams.get('format');
-    const limit = parseInt(searchParams.get('limit') || '50', 10);
-    const page = parseInt(searchParams.get('page') || '1', 10);
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const limit = Math.min(100, Math.max(10, parseInt(searchParams.get('limit') || '25', 10)));
 
-    const db = getDb();
+    const auditCol = await hardwareAuditLogsCol();
+    const filter: Record<string, any> = {};
 
-    // Check if table has records, if empty, seed standard records
-    const countCheck: any = db.prepare(`SELECT COUNT(*) as c FROM HardwareAuditLog`).get();
-    if (countCheck.c === 0) {
-      const seedItems = [
-        { adminId: '6', adminName: 'shanmukh nath', code: 1, target: null, targetName: null, time: '2026-08-31 15:38:48' },
-        { adminId: '6', adminName: 'shanmukh nath', code: 6, target: '3', targetName: 'test', time: '2026-08-28 14:17:20' },
-        { adminId: '6', adminName: 'shanmukh nath', code: 3, target: '6', targetName: 'shanmukh nath', time: '2026-08-28 10:40:15' },
-        { adminId: '2', adminName: 'karthik', code: 1, target: null, targetName: null, time: '2026-08-28 11:25:00' },
-        { adminId: '2', adminName: 'karthik', code: 3, target: '2', targetName: 'karthik', time: '2026-08-28 11:26:10' },
-        { adminId: '1', adminName: 'hemanth', code: 14, target: null, targetName: 'Clock Sync (+0s)', time: '2026-08-25 09:00:12' },
-        { adminId: '1', adminName: 'hemanth', code: 15, target: null, targetName: 'IP 192.168.29.83', time: '2026-08-24 16:30:45' },
-        { adminId: '6', adminName: 'shanmukh nath', code: 4, target: '6', targetName: 'shanmukh nath', time: '2026-08-28 12:49:10' },
-        { adminId: '1', adminName: 'hemanth', code: 1, target: null, targetName: null, time: '2026-08-20 10:15:30' },
-      ];
-
-      const ins = db.prepare(`
-        INSERT INTO HardwareAuditLog (id, deviceId, adminUserId, adminName, actionCode, actionCategory, actionDescription, targetUserId, targetName, timestamp, createdAt)
-        VALUES (?, '102023050002456', ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-      `);
-
-      for (const item of seedItems) {
-        const cat = categorizeAction(item.code);
-        ins.run(cuid(), item.adminId, item.adminName, item.code, cat.category, cat.description, item.target, item.targetName, item.time);
-      }
+    if (startDate || endDate) {
+      filter.timestamp = {};
+      if (startDate) filter.timestamp.$gte = `${startDate} 00:00:00`;
+      if (endDate) filter.timestamp.$lte = `${endDate} 23:59:59`;
     }
 
-    let whereSql = 'WHERE 1=1';
-    const params: any[] = [];
-
-    if (startDate) {
-      whereSql += ' AND timestamp >= ?';
-      params.push(`${startDate} 00:00:00`);
-    }
-    if (endDate) {
-      whereSql += ' AND timestamp <= ?';
-      params.push(`${endDate} 23:59:59`);
-    }
     if (adminUserId && adminUserId !== 'ALL') {
-      whereSql += ' AND adminUserId = ?';
-      params.push(adminUserId);
+      filter.adminUserId = adminUserId;
     }
+
     if (actionCategory && actionCategory !== 'ALL') {
-      whereSql += ' AND actionCategory = ?';
-      params.push(actionCategory);
+      filter.actionCategory = actionCategory;
     }
+
     if (search) {
-      whereSql += ' AND (adminName LIKE ? OR actionDescription LIKE ? OR targetName LIKE ? OR timestamp LIKE ?)';
-      const s = `%${search}%`;
-      params.push(s, s, s, s);
+      const reg = new RegExp(search, 'i');
+      filter.$or = [
+        { adminName: reg },
+        { actionDescription: reg },
+        { targetName: reg },
+        { timestamp: reg },
+      ];
     }
 
     // CSV Export
     if (format === 'csv') {
-      const allRows: any[] = db.prepare(`SELECT * FROM HardwareAuditLog ${whereSql} ORDER BY timestamp DESC`).all(...params);
+      const allRows = await auditCol.find(filter).sort({ timestamp: -1 }).toArray();
       const csvHeader = 'Timestamp,Admin User ID,Admin Name,Action Category,Action Description,Target User,Device Serial\n';
       const csvData = allRows
         .map(
@@ -169,31 +104,29 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Total Count
-    const totalCountRow: any = db.prepare(`SELECT COUNT(*) as c FROM HardwareAuditLog ${whereSql}`).get(...params);
-    const total = totalCountRow.c;
-
-    // Paginated Rows
+    const total = await auditCol.countDocuments(filter);
     const offset = (page - 1) * limit;
-    const rows: any[] = db.prepare(`SELECT * FROM HardwareAuditLog ${whereSql} ORDER BY timestamp DESC LIMIT ? OFFSET ?`).all(...params, limit, offset);
+    const rows = await auditCol.find(filter).sort({ timestamp: -1 }).skip(offset).limit(limit).toArray();
 
-    // KPI Metrics across whole dataset
-    const stats: any = db
-      .prepare(
-        `
-      SELECT 
-        COUNT(*) as totalOps,
-        SUM(CASE WHEN actionCategory = 'ENROLLMENT' THEN 1 ELSE 0 END) as enrollments,
-        SUM(CASE WHEN actionCategory IN ('CONFIG_CHANGE', 'TIME_SYNC') THEN 1 ELSE 0 END) as configChanges,
-        SUM(CASE WHEN actionCategory IN ('DELETION', 'MEMORY_WIPE') THEN 1 ELSE 0 END) as deletionWipes,
-        SUM(CASE WHEN actionCategory = 'MENU_ACCESS' THEN 1 ELSE 0 END) as menuLogins
-      FROM HardwareAuditLog
-    `
-      )
-      .get();
+    // KPI Metrics across whole collection
+    const [allLogs, distinctAdmins] = await Promise.all([
+      auditCol.find({}, { projection: { actionCategory: 1 } }).toArray(),
+      auditCol.distinct('adminUserId'),
+    ]);
 
-    // Unique Admins for filter dropdown
-    const admins: any[] = db.prepare(`SELECT DISTINCT adminUserId, adminName FROM HardwareAuditLog ORDER BY adminName ASC`).all();
+    let enrollments = 0, configChanges = 0, deletionWipes = 0, menuLogins = 0;
+    for (const l of allLogs) {
+      if (l.actionCategory === 'ENROLLMENT') enrollments++;
+      else if (['CONFIG_CHANGE', 'TIME_SYNC'].includes(l.actionCategory)) configChanges++;
+      else if (['DELETION', 'MEMORY_WIPE'].includes(l.actionCategory)) deletionWipes++;
+      else if (l.actionCategory === 'MENU_ACCESS') menuLogins++;
+    }
+
+    const adminDocs = await auditCol.aggregate([
+      { $group: { _id: '$adminUserId', adminName: { $first: '$adminName' } } },
+      { $project: { adminUserId: '$_id', adminName: 1, _id: 0 } },
+      { $sort: { adminName: 1 } },
+    ]).toArray();
 
     return NextResponse.json({
       success: true,
@@ -206,13 +139,13 @@ export async function GET(req: NextRequest) {
           totalPages: Math.ceil(total / limit),
         },
         stats: {
-          totalOperations: stats.totalOps || 0,
-          enrollments: stats.enrollments || 0,
-          configChanges: stats.configChanges || 0,
-          deletionWipes: stats.deletionWipes || 0,
-          menuLogins: stats.menuLogins || 0,
+          totalOperations: allLogs.length,
+          enrollments,
+          configChanges,
+          deletionWipes,
+          menuLogins,
         },
-        admins,
+        admins: adminDocs,
       },
     });
   } catch (err: any) {
@@ -225,12 +158,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { deviceId = '102023050002456', sLogs = [] } = body;
 
-    const db = getDb();
-    const ins = db.prepare(`
-      INSERT INTO HardwareAuditLog (id, deviceId, adminUserId, adminName, actionCode, actionCategory, actionDescription, targetUserId, targetName, timestamp, rawPayload, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    `);
-
+    const auditCol = await hardwareAuditLogsCol();
     const usersMap: Record<string, string> = {
       '1': 'hemanth',
       '2': 'karthik',
@@ -239,26 +167,29 @@ export async function POST(req: NextRequest) {
     };
 
     let count = 0;
+    const now = new Date();
+
     for (const log of sLogs) {
       if (!log.adminId || !log.timestamp) continue;
       const cat = categorizeAction(log.actionCode || 1);
       const adminName = usersMap[String(log.adminId)] || `Admin ${log.adminId}`;
-      const logId = cuid();
+      const logId = generateId();
 
       try {
-        ins.run(
-          logId,
+        await auditCol.insertOne({
+          id: logId,
           deviceId,
-          String(log.adminId),
+          adminUserId: String(log.adminId),
           adminName,
-          log.actionCode || 1,
-          cat.category,
-          cat.description,
-          log.targetUserId || null,
-          log.targetName || null,
-          log.timestamp,
-          JSON.stringify(log)
-        );
+          actionCode: log.actionCode || 1,
+          actionCategory: cat.category,
+          actionDescription: cat.description,
+          targetUserId: log.targetUserId || null,
+          targetName: log.targetName || null,
+          timestamp: log.timestamp,
+          rawPayload: JSON.stringify(log),
+          createdAt: now,
+        });
         count++;
       } catch {}
     }

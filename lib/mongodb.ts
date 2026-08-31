@@ -151,6 +151,11 @@ export async function systemEventsCol(): Promise<Collection<any>> {
   return db.collection('system_events');
 }
 
+export async function hardwareAuditLogsCol(): Promise<Collection<any>> {
+  const db = await getMongoDb();
+  return db.collection('hardware_audit_logs');
+}
+
 export async function passkeysCol(): Promise<Collection<any>> {
   const db = await getMongoDb();
   return db.collection('passkey_credentials');

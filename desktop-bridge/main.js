@@ -1,13 +1,24 @@
 const { app, BrowserWindow, session } = require('electron');
 const path = require('path');
+const os = require('os');
 
-// Suppress GPU shader cache permission errors on Windows
+// Configure isolated userData directory to avoid Windows %APPDATA% lock collisions
+try {
+  const customUserData = path.join(app.getPath('appData'), 'KernnSyncBridgeData');
+  app.setPath('userData', customUserData);
+} catch (_) {}
+
+// Suppress Chromium disk cache locking, shader caches, and stderr noise on Windows
+app.commandLine.appendSwitch('disable-http-cache');
+app.commandLine.appendSwitch('disk-cache-size', '1');
+app.commandLine.appendSwitch('media-cache-size', '1');
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
+app.commandLine.appendSwitch('disable-gpu-program-cache');
 app.commandLine.appendSwitch('disable-software-rasterizer');
 app.commandLine.appendSwitch('disable-gpu');
-// Disable Chromium session restore so stale DOM state never re-appears
 app.commandLine.appendSwitch('disable-restore-session-state');
 app.commandLine.appendSwitch('disable-background-networking');
+app.commandLine.appendSwitch('log-level', '3'); // Suppress non-fatal Chromium console warnings/cache errors
 
 let mainWindow = null;
 

@@ -1,22 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { DatabaseSync } from 'node:sqlite';
-import path from 'path';
 import { getAuthSession } from '@/lib/auth';
 import { decodeVerifyMode } from '@/server/secureye/native-bridge';
+import {
+  devicesCol,
+  employeesCol,
+  attendanceEventsCol,
+  generateId,
+} from '@/lib/mongodb';
 
 export const dynamic = 'force-dynamic';
 
-function getDb() {
-  const dbPath = path.join(process.cwd(), 'prisma', 'dev.db');
-  return new DatabaseSync(dbPath);
-}
-
-function cuid(): string {
-  return 'c' + Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
-}
-
 /**
- * CLOUD SYNC RECEIVER (Vercel & Cloud Compatible)
+ * CLOUD SYNC RECEIVER (Vercel & MongoDB Atlas Compatible)
  * Receives pulled attendance logs from Desktop Sync Bridge (Windows/macOS)
  */
 export async function POST(req: NextRequest) {
@@ -31,79 +26,96 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const db = getDb();
+    const devices = await devicesCol();
+    const employees = await employeesCol();
+    const attendanceEvents = await attendanceEventsCol();
 
     // 1. Ensure Device record exists
-    let device: any = db.prepare(`SELECT id, name FROM Device WHERE deviceId = ? OR id = ?`).get(deviceId, deviceId);
+    let device = await devices.findOne({ $or: [{ deviceId }, { id: deviceId }] });
+    const now = new Date();
+
     if (!device) {
-      const devId = cuid();
-      db.prepare(`
-        INSERT INTO Device (id, name, ipAddress, port, deviceId, protocol, status, lastSeenAt, createdAt, updatedAt)
-        VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))
-      `).run(devId, `Secureye Terminal (${deviceIp})`, deviceIp, 5005, deviceId, 'Secureye/FKWeb', 'ONLINE');
-      device = { id: devId, name: `Secureye Terminal (${deviceIp})` };
+      const devId = generateId();
+      const newDev = {
+        id: devId,
+        name: `Secureye Terminal (${deviceIp})`,
+        ipAddress: deviceIp,
+        port: 5005,
+        deviceId,
+        protocol: 'Secureye/FKWeb',
+        status: 'ONLINE',
+        lastSeenAt: now,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await devices.insertOne(newDev);
+      device = newDev;
     } else {
-      db.prepare(`UPDATE Device SET status = 'ONLINE', lastSeenAt = datetime('now') WHERE id = ?`).run(device.id);
+      await devices.updateOne(
+        { _id: device._id },
+        { $set: { status: 'ONLINE', lastSeenAt: now, updatedAt: now } }
+      );
     }
 
     let insertedCount = 0;
     let skippedCount = 0;
 
-    const checkStmt = db.prepare(`
-      SELECT id FROM AttendanceEvent 
-      WHERE deviceId = ? AND deviceUserId = ? AND timestamp = ?
-    `);
-
-    const insertStmt = db.prepare(`
-      INSERT INTO AttendanceEvent (id, deviceId, employeeId, deviceUserId, timestamp, eventType, verificationType, source, rawPayload, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    `);
-
-    const findEmpStmt = db.prepare(`SELECT id, name FROM Employee WHERE deviceUserId = ? OR employeeCode = ?`);
-    const createEmpStmt = db.prepare(`
-      INSERT INTO Employee (id, deviceId, name, employeeCode, deviceUserId, department, designation, status, createdAt, updatedAt)
-      VALUES (?, ?, ?, ?, ?, 'Operations', 'Staff Member', 'ACTIVE', datetime('now'), datetime('now'))
-    `);
-
     for (const punch of punches) {
       if (!punch.userId || !punch.timestamp) continue;
 
       const uId = String(punch.userId);
-      const timestampIso = new Date(punch.timestamp).toISOString();
+      const punchDate = new Date(punch.timestamp);
+      const timestampIso = isNaN(punchDate.getTime()) ? punch.timestamp : punchDate.toISOString();
 
       // Find or create employee
-      let emp: any = findEmpStmt.get(uId, `EMP-${uId}`);
+      let emp = await employees.findOne({
+        $or: [{ deviceUserId: uId }, { employeeCode: `EMP-${uId}` }],
+      });
+
       if (!emp) {
-        const empId = cuid();
+        const empId = generateId();
         const empName = punch.name || `Employee ${uId}`;
-        try {
-          createEmpStmt.run(empId, device.id, empName, `EMP-${uId}`, uId);
-          emp = { id: empId, name: empName };
-        } catch (e: any) {
-          // If already exists under another deviceId
-          emp = db.prepare(`SELECT id, name FROM Employee WHERE deviceUserId = ?`).get(uId);
-        }
+        const newEmp = {
+          id: empId,
+          deviceId: device.id || deviceId,
+          name: empName,
+          employeeCode: `EMP-${uId}`,
+          deviceUserId: uId,
+          department: 'Operations',
+          designation: 'Staff Member',
+          status: 'ACTIVE',
+          createdAt: now,
+          updatedAt: now,
+        };
+        await employees.insertOne(newEmp);
+        emp = newEmp;
       }
 
       // Check for duplicate punch
-      const existing = checkStmt.get(device.id, uId, timestampIso);
+      const existing = await attendanceEvents.findOne({
+        deviceId: device.id || deviceId,
+        deviceUserId: uId,
+        timestamp: timestampIso,
+      });
+
       if (existing) {
         skippedCount++;
       } else {
         const { eventType, verificationType } = decodeVerifyMode(punch.verifyMode || 1);
-        const eventId = cuid();
+        const eventId = generateId();
 
-        insertStmt.run(
-          eventId,
-          device.id,
-          emp.id,
-          uId,
-          timestampIso,
-          punch.eventType || eventType,
-          punch.verificationType || verificationType,
-          'DESKTOP_BRIDGE_SYNC',
-          JSON.stringify(punch)
-        );
+        await attendanceEvents.insertOne({
+          id: eventId,
+          deviceId: device.id || deviceId,
+          employeeId: emp.id || emp._id?.toString(),
+          deviceUserId: uId,
+          timestamp: timestampIso,
+          eventType: punch.eventType || eventType,
+          verificationType: punch.verificationType || verificationType,
+          source: 'DESKTOP_BRIDGE_SYNC',
+          rawPayload: JSON.stringify(punch),
+          createdAt: now,
+        });
         insertedCount++;
       }
     }
@@ -115,11 +127,12 @@ export async function POST(req: NextRequest) {
         totalReceived: punches.length,
         insertedCount,
         skippedCount,
-        deviceId: device.id,
-        syncedAt: new Date().toISOString(),
+        deviceId: device.id || deviceId,
+        syncedAt: now.toISOString(),
       },
     });
   } catch (err: any) {
+    console.error('[SYNC_PUSH_ERROR]', err);
     return NextResponse.json(
       { success: false, error: { code: 'SYNC_FAILED', message: err.message } },
       { status: 500 }

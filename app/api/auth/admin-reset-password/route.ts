@@ -1,15 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession, hashPassword, generateTemporaryPassword } from '@/lib/auth';
-import { updateUserPassword, findUserById } from '@/lib/db';
-import { DatabaseSync } from 'node:sqlite';
-import path from 'path';
+import { usersCol } from '@/lib/mongodb';
 
 export const dynamic = 'force-dynamic';
-
-function getDb() {
-  const dbPath = path.join(process.cwd(), 'prisma', 'dev.db');
-  return new DatabaseSync(dbPath);
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,17 +31,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const db = getDb();
+    const users = await usersCol();
     let targetUser: any = null;
 
     if (userId) {
-      targetUser = db.prepare('SELECT id, name, mobileNumber, roleId FROM User WHERE id = ?').get(userId);
+      targetUser = await users.findOne({ $or: [{ id: userId }, { _id: userId }] });
     } else if (employeeId) {
-      targetUser = db.prepare('SELECT id, name, mobileNumber, roleId FROM User WHERE employeeId = ?').get(employeeId);
-    }
-
-    if (!targetUser && userId) {
-      targetUser = await findUserById(userId);
+      targetUser = await users.findOne({ employeeId });
     }
 
     if (!targetUser) {
@@ -64,27 +53,28 @@ export async function POST(req: NextRequest) {
       : generateTemporaryPassword();
 
     const passwordHash = hashPassword(plainPassword);
+    const now = new Date();
 
-    // Update in DB
-    await updateUserPassword(targetUser.id, passwordHash, forceChangeOnLogin);
-
-    // Also ensure SQLite is updated
-    try {
-      db.prepare(`
-        UPDATE User 
-        SET passwordHash = ?, mustChangePassword = ?, updatedAt = datetime('now') 
-        WHERE id = ?
-      `).run(passwordHash, forceChangeOnLogin ? 1 : 0, targetUser.id);
-    } catch {}
+    // Update in MongoDB Atlas
+    await users.updateOne(
+      { _id: targetUser._id },
+      {
+        $set: {
+          passwordHash,
+          mustChangePassword: Boolean(forceChangeOnLogin),
+          updatedAt: now,
+        },
+      }
+    );
 
     return NextResponse.json({
       success: true,
       data: {
-        userId: targetUser.id,
+        userId: targetUser.id || targetUser._id?.toString(),
         userName: targetUser.name,
         mobileNumber: targetUser.mobileNumber,
         temporaryPassword: plainPassword,
-        mustChangePassword: forceChangeOnLogin,
+        mustChangePassword: Boolean(forceChangeOnLogin),
       },
       message: `Password for ${targetUser.name} has been successfully reset.`,
     });

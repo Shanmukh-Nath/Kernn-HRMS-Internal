@@ -1,15 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession, hashPassword, verifyPassword, createSessionToken, AUTH_COOKIE_NAME } from '@/lib/auth';
-import { updateUserPassword, findUserById } from '@/lib/db';
-import { DatabaseSync } from 'node:sqlite';
-import path from 'path';
+import { usersCol } from '@/lib/mongodb';
 
 export const dynamic = 'force-dynamic';
-
-function getDb() {
-  const dbPath = path.join(process.cwd(), 'prisma', 'dev.db');
-  return new DatabaseSync(dbPath);
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -37,12 +30,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const db = getDb();
-    const userRow: any = db.prepare('SELECT id, passwordHash, mustChangePassword FROM User WHERE id = ?').get(session.userId);
+    const users = await usersCol();
+    const user = await users.findOne({ $or: [{ id: session.userId }, { _id: session.userId }] });
+
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: { code: 'USER_NOT_FOUND', message: 'User account not found' } },
+        { status: 404 }
+      );
+    }
 
     // If user is not under forced password change, require current password
-    if (userRow && !userRow.mustChangePassword && currentPassword) {
-      const isValid = verifyPassword(currentPassword, userRow.passwordHash);
+    if (!user.mustChangePassword && currentPassword) {
+      const isValid = verifyPassword(currentPassword, user.passwordHash);
       if (!isValid) {
         return NextResponse.json(
           { success: false, error: { code: 'INVALID_CURRENT_PASSWORD', message: 'Current password is incorrect' } },
@@ -52,12 +52,18 @@ export async function POST(req: NextRequest) {
     }
 
     const newHash = hashPassword(newPassword);
-    await updateUserPassword(session.userId, newHash, false);
+    const now = new Date();
 
-    // Update in SQLite
-    try {
-      db.prepare(`UPDATE User SET passwordHash = ?, mustChangePassword = 0, updatedAt = datetime('now') WHERE id = ?`).run(newHash, session.userId);
-    } catch {}
+    await users.updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          passwordHash: newHash,
+          mustChangePassword: false,
+          updatedAt: now,
+        },
+      }
+    );
 
     // Issue refreshed session
     const updatedSession = {

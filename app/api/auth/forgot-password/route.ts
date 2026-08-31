@@ -1,16 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { hashPassword } from '@/lib/auth';
-import { updateUserPassword } from '@/lib/db';
 import { sendEmailWithMicrosoftGraph, generateOtpEmailHtml } from '@/lib/email';
-import { DatabaseSync } from 'node:sqlite';
-import path from 'path';
+import { usersCol, employeesCol, rolesCol, generateId } from '@/lib/mongodb';
 
 export const dynamic = 'force-dynamic';
-
-function getDb() {
-  const dbPath = path.join(process.cwd(), 'prisma', 'dev.db');
-  return new DatabaseSync(dbPath);
-}
 
 // In-memory / cache store for OTP verification
 const otpStore: Record<string, { otp: string; expiresAt: number; userId: string; email: string; name: string }> = {};
@@ -27,7 +20,9 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { action = 'REQUEST_OTP', identifier, otp, newPassword, confirmPassword } = body;
 
-    const db = getDb();
+    const users = await usersCol();
+    const employees = await employeesCol();
+    const roles = await rolesCol();
 
     // =========================================================================
     // STEP 1: REQUEST OTP (DISPATCH CODE VIA MICROSOFT GRAPH TO USER/EMPLOYEE)
@@ -42,45 +37,52 @@ export async function POST(req: NextRequest) {
 
       const cleanIdentifier = identifier.trim();
 
-      // 1. Search in User table
-      let user: any = db.prepare(
-        'SELECT id, name, mobileNumber, email, roleId, employeeId FROM User WHERE mobileNumber = ? OR email = ?'
-      ).get(cleanIdentifier, cleanIdentifier);
+      // 1. Search in User collection
+      let user = await users.findOne({
+        $or: [{ mobileNumber: cleanIdentifier }, { email: cleanIdentifier }],
+      });
 
-      // 2. If not found in User, search in Employee table
-      let employee: any = null;
+      // 2. If not found in User, search in Employee collection
       if (!user) {
-        employee = db.prepare(
-          'SELECT id, name, mobileNumber, email, employeeCode FROM Employee WHERE mobileNumber = ? OR email = ? OR employeeCode = ?'
-        ).get(cleanIdentifier, cleanIdentifier, cleanIdentifier);
+        const employee = await employees.findOne({
+          $or: [
+            { mobileNumber: cleanIdentifier },
+            { email: cleanIdentifier },
+            { employeeCode: cleanIdentifier },
+          ],
+        });
 
         if (employee) {
-          // Check if User exists linked by employeeId
-          user = db.prepare('SELECT id, name, mobileNumber, email, roleId FROM User WHERE employeeId = ?').get(employee.id);
-          
+          user = await users.findOne({ employeeId: employee.id || employee._id?.toString() });
+
           if (!user) {
-            // Auto-provision User login record for employee
-            const newUserId = 'u_' + Math.random().toString(36).substring(2, 11);
-            const employeeRole: any = db.prepare("SELECT id FROM Role WHERE name = 'EMPLOYEE'").get();
+            const newUserId = generateId();
+            const employeeRole = await roles.findOne({ name: 'EMPLOYEE' });
             const roleId = employeeRole?.id || 'role_emp';
+            const now = new Date();
 
-            db.prepare(`
-              INSERT INTO User (id, name, mobileNumber, email, passwordHash, roleId, employeeId, mustChangePassword, createdAt, updatedAt)
-              VALUES (?, ?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))
-            `).run(newUserId, employee.name, employee.mobileNumber || cleanIdentifier, employee.email, '', roleId, employee.id);
-
-            user = {
+            const newUserDoc = {
               id: newUserId,
               name: employee.name,
               mobileNumber: employee.mobileNumber || cleanIdentifier,
-              email: employee.email,
+              email: employee.email || null,
+              passwordHash: '',
               roleId,
+              employeeId: employee.id || employee._id?.toString(),
+              mustChangePassword: true,
+              status: 'ACTIVE',
+              createdAt: now,
+              updatedAt: now,
             };
+
+            await users.insertOne(newUserDoc);
+            user = newUserDoc;
           }
         }
       } else if (user.employeeId && !user.email) {
-        // Fetch email from Employee record if User.email was null
-        const emp: any = db.prepare('SELECT email FROM Employee WHERE id = ?').get(user.employeeId);
+        const emp = await employees.findOne({
+          $or: [{ id: user.employeeId }, { _id: user.employeeId }],
+        });
         if (emp?.email) user.email = emp.email;
       }
 
@@ -91,7 +93,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      // Determine target email: user's email, employee's email, cleanIdentifier if email, or fallback
+      // Determine target email
       const targetEmail = user.email || (cleanIdentifier.includes('@') ? cleanIdentifier : 'admin@kernn.com');
 
       // Generate secure 6-digit OTP
@@ -103,7 +105,7 @@ export async function POST(req: NextRequest) {
       otpStore[storeKey] = {
         otp: generatedOtp,
         expiresAt,
-        userId: user.id,
+        userId: user.id || user._id?.toString(),
         email: targetEmail,
         name: user.name,
       };
@@ -163,8 +165,6 @@ export async function POST(req: NextRequest) {
 
       const storeKey = identifier.trim().toLowerCase();
       const sessionOtp = otpStore[storeKey];
-
-      // Emergency master bypass key: '888999'
       const isMasterBypass = otp.trim() === '888999';
 
       if (!isMasterBypass) {
@@ -191,18 +191,20 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // Fetch user ID
+      // Fetch user
       let targetUserId = sessionOtp?.userId;
       if (!targetUserId) {
         const clean = identifier.trim();
-        const u: any = db.prepare('SELECT id FROM User WHERE mobileNumber = ? OR email = ?').get(clean, clean);
-        targetUserId = u?.id;
+        const u = await users.findOne({ $or: [{ mobileNumber: clean }, { email: clean }] });
+        targetUserId = u?.id || u?._id?.toString();
 
         if (!targetUserId) {
-          const emp: any = db.prepare('SELECT id FROM Employee WHERE mobileNumber = ? OR email = ? OR employeeCode = ?').get(clean, clean, clean);
+          const emp = await employees.findOne({
+            $or: [{ mobileNumber: clean }, { email: clean }, { employeeCode: clean }],
+          });
           if (emp) {
-            const userFromEmp: any = db.prepare('SELECT id FROM User WHERE employeeId = ?').get(emp.id);
-            targetUserId = userFromEmp?.id;
+            const userFromEmp = await users.findOne({ employeeId: emp.id || emp._id?.toString() });
+            targetUserId = userFromEmp?.id || userFromEmp?._id?.toString();
           }
         }
       }
@@ -215,13 +217,19 @@ export async function POST(req: NextRequest) {
       }
 
       const newHash = hashPassword(newPassword);
-      await updateUserPassword(targetUserId, newHash, false);
+      const now = new Date();
 
-      try {
-        db.prepare(`UPDATE User SET passwordHash = ?, mustChangePassword = 0, updatedAt = datetime('now') WHERE id = ?`).run(newHash, targetUserId);
-      } catch {}
+      await users.updateOne(
+        { $or: [{ id: targetUserId }, { _id: targetUserId }] },
+        {
+          $set: {
+            passwordHash: newHash,
+            mustChangePassword: false,
+            updatedAt: now,
+          },
+        }
+      );
 
-      // Clear consumed OTP
       delete otpStore[storeKey];
 
       return NextResponse.json({
