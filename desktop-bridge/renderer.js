@@ -730,6 +730,19 @@ function initApp() {
     if ($('termLogCount')) $('termLogCount').textContent = 'Cleared';
   });
 
+  // Custom Frameless Window Controls
+  $('btnWinMin')?.addEventListener('click', () => ipcRenderer.send('window-minimize'));
+  $('btnWinMax')?.addEventListener('click', () => ipcRenderer.send('window-maximize'));
+  $('btnWinClose')?.addEventListener('click', () => ipcRenderer.send('window-close'));
+
+  ipcRenderer.on('window-maximized-state', (event, isMax) => {
+    const icon = $('iconWinMax');
+    if (icon) {
+      icon.setAttribute('data-lucide', isMax ? 'copy' : 'square');
+      reIcons();
+    }
+  });
+
   // 1-Click Quick Sync & RTC Time
   $('btnQuickSyncTop')?.addEventListener('click', executeQuickSync);
   $('btnSyncTimeQuick')?.addEventListener('click', executeRtcTimeSync);

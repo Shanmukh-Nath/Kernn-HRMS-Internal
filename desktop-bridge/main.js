@@ -28,10 +28,10 @@ let isQuitting = false;
 Menu.setApplicationMenu(null);
 
 function createTray() {
-  const iconPath = path.join(__dirname, 'icon.png');
+  const iconPath = path.join(__dirname, 'app-icon.png');
   let icon;
   try {
-    icon = nativeImage.createFromPath(iconPath);
+    icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
   } catch (_) {
     icon = nativeImage.createEmpty();
   }
@@ -104,22 +104,19 @@ function createWindow() {
     minHeight: 700,
     title: 'Kernn Sync Bridge',
     backgroundColor: '#070b14',
-    autoHideMenuBar: true,
-    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    trafficLightPosition: { x: 18, y: 16 },
+    frame: false, // Fully frameless, immersive design with custom window controls
+    transparent: false,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
     },
     show: false,
-    icon: path.join(__dirname, 'icon.png'),
+    icon: path.join(__dirname, 'app-icon.png'),
   });
 
-  mainWindow.setMenuBarVisibility(false);
   mainWindow.loadFile('index.html');
 
   mainWindow.once('ready-to-show', () => {
-    // Check if launched at startup with --hidden
     const isHidden = process.argv.includes('--hidden');
     if (!isHidden) {
       mainWindow.show();
@@ -127,7 +124,15 @@ function createWindow() {
     mainWindow.webContents.setBackgroundThrottling(false);
   });
 
-  // Minimize to tray on close unless quitting
+  // Track maximize state to toggle window control icon
+  mainWindow.on('maximize', () => {
+    mainWindow.webContents.send('window-maximized-state', true);
+  });
+  mainWindow.on('unmaximize', () => {
+    mainWindow.webContents.send('window-maximized-state', false);
+  });
+
+  // Minimize to tray on close unless explicitly quitting
   mainWindow.on('close', (e) => {
     if (!isQuitting) {
       e.preventDefault();
@@ -135,7 +140,7 @@ function createWindow() {
       if (tray) {
         tray.displayBalloon?.({
           title: 'Kernn Sync Bridge',
-          content: 'Running silently in the system tray. Background sync is active.',
+          content: 'Running silently in the background. Double-click tray icon to open.',
         });
       }
     }
@@ -146,7 +151,32 @@ function createWindow() {
   });
 }
 
-// IPC Handlers
+// Window control IPC Handlers
+ipcMain.on('window-minimize', () => {
+  if (mainWindow) mainWindow.minimize();
+});
+
+ipcMain.on('window-maximize', () => {
+  if (mainWindow) {
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize();
+    } else {
+      mainWindow.maximize();
+    }
+  }
+});
+
+ipcMain.on('window-close', () => {
+  if (mainWindow) {
+    if (!isQuitting) {
+      mainWindow.hide();
+    } else {
+      app.quit();
+    }
+  }
+});
+
+// Auto-start IPC Handlers
 ipcMain.handle('get-autostart-status', () => {
   return app.getLoginItemSettings().openAtLogin;
 });
@@ -157,10 +187,6 @@ ipcMain.handle('set-autostart-status', (event, enabled) => {
     openAsHidden: true,
   });
   return app.getLoginItemSettings().openAtLogin;
-});
-
-ipcMain.on('minimize-to-tray', () => {
-  if (mainWindow) mainWindow.hide();
 });
 
 app.whenReady().then(() => {

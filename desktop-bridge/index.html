@@ -7,16 +7,21 @@
   <link rel="stylesheet" href="styles.css">
   <script src="https://unpkg.com/lucide@0.344.0/dist/umd/lucide.min.js"></script>
 </head>
-<body>
+<body class="frameless-app">
 
-<!-- ===== TITLEBAR ===== -->
-<header class="titlebar">
-  <div class="tb-brand">
-    <div class="tb-icon">K</div>
-    <span class="tb-name">Kernn Sync Bridge</span>
-    <span class="tb-ver">v2.0 PRO</span>
+<!-- ===== FULLY IMMERSIVE CUSTOM TITLEBAR ===== -->
+<header class="titlebar" id="appTitlebar">
+  <div class="tb-left">
+    <div class="tb-brand">
+      <img src="app-icon.png" class="tb-logo-img" alt="Kernn">
+      <span class="tb-name">Kernn Sync Bridge</span>
+      <span class="tb-ver">v2.0 PRO</span>
+    </div>
   </div>
-  <div class="tb-actions">
+
+  <div class="tb-center-drag"></div>
+
+  <div class="tb-right">
     <button class="btn-quick-sync" id="btnQuickSyncTop" title="1-Click Pull, Review & Push to Cloud">
       <i data-lucide="zap" style="width:13px;height:13px"></i>
       <span>Quick Sync</span>
@@ -28,6 +33,19 @@
     <div class="tb-status" id="topStatus">
       <div class="tb-dot"></div>
       <span id="topStatusText">Gateway Ready</span>
+    </div>
+
+    <!-- Custom Window Controls -->
+    <div class="window-controls">
+      <button class="win-btn win-min" id="btnWinMin" title="Minimize">
+        <i data-lucide="minus" style="width:14px;height:14px"></i>
+      </button>
+      <button class="win-btn win-max" id="btnWinMax" title="Maximize / Restore">
+        <i data-lucide="square" id="iconWinMax" style="width:12px;height:12px"></i>
+      </button>
+      <button class="win-btn win-close" id="btnWinClose" title="Close to Tray">
+        <i data-lucide="x" style="width:14px;height:14px"></i>
+      </button>
     </div>
   </div>
 </header>
@@ -56,8 +74,8 @@
 <!-- ===== AUTH VIEW ===== -->
 <div id="authView">
   <div class="auth-card">
-    <div class="auth-logo">
-      <i data-lucide="shield-check" style="width:26px;height:26px;color:#fff"></i>
+    <div class="auth-logo-wrap">
+      <img src="app-icon.png" class="auth-logo-img" alt="Kernn Icon">
     </div>
     <div class="auth-title">Manager Gateway</div>
     <div class="auth-sub">Sign in to access the Secureye biometric hardware bridge</div>
