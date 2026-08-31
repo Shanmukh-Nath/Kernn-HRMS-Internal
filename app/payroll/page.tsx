@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import {
   DollarSign,
   Play,
@@ -37,7 +37,7 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December'
 ];
 
-export default function PayrollPage() {
+function PayrollContent() {
   const searchParams = useSearchParams();
   const initialTab = searchParams.get('tab') === 'STRUCTURES' ? 'STRUCTURES' : searchParams.get('tab') === 'SIMULATOR' ? 'SIMULATOR' : 'REGISTER';
   const [activeTab, setActiveTab] = useState<'REGISTER' | 'STRUCTURES' | 'SIMULATOR'>(initialTab);
@@ -1512,5 +1512,13 @@ export default function PayrollPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function PayrollPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500 font-semibold">Loading Payroll Hub...</div>}>
+      <PayrollContent />
+    </Suspense>
   );
 }

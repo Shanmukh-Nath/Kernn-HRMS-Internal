@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import {
   Palmtree,
   Calendar,
@@ -41,7 +41,7 @@ import {
 import { format, differenceInCalendarDays } from 'date-fns';
 import { useSearchParams } from 'next/navigation';
 
-export default function LeavesPage() {
+function LeavesContent() {
   const searchParams = useSearchParams();
   const initialTab =
     searchParams.get('tab') === 'POLICIES'
@@ -2073,5 +2073,13 @@ export default function LeavesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function LeavesPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500 font-semibold">Loading Leaves Desk...</div>}>
+      <LeavesContent />
+    </Suspense>
   );
 }
