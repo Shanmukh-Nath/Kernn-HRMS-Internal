@@ -19,7 +19,9 @@
     "admin:create": "tsx scripts/create-admin.ts"
   },
   "dependencies": {
+    "@azure/msal-node": "^6.0.0",
     "@prisma/client": "^6.4.1",
+    "axios": "^1.20.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "lucide-react": "^1.16.0",
