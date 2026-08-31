@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kernn Sync Bridge - Biometric Hardware Gateway</title>
+  <title>Kernn Sync Bridge - Enterprise Biometric Gateway</title>
   <link rel="stylesheet" href="styles.css">
   <!-- Lucide Icons CDN -->
   <script src="https://unpkg.com/lucide@latest"></script>
@@ -23,11 +23,64 @@
     </div>
   </header>
 
-  <!-- App Layout -->
-  <div class="app-container">
+  <!-- ========================================================================= -->
+  <!-- 1. AUTHENTICATION VIEW (GATED LOGIN FOR ADMIN/MANAGER)                    -->
+  <!-- ========================================================================= -->
+  <div class="auth-container" id="authView">
+    <div class="auth-card">
+      <div class="auth-avatar">
+        <i data-lucide="shield-check" style="width: 28px; height: 28px;"></i>
+      </div>
+      <h1 class="auth-title">Manager Authentication</h1>
+      <p class="auth-subtitle">Sign in with your HRMS Administrator credentials to access the biometric hardware bridge.</p>
+
+      <div class="auth-error-banner" id="authErrorBanner">
+        Invalid credentials or unauthorized role.
+      </div>
+
+      <form class="auth-form" id="loginForm">
+        <div class="input-field">
+          <label>Cloud Server URL</label>
+          <input type="text" id="loginServerUrl" value="http://localhost:3000" placeholder="https://your-hrms.vercel.app">
+        </div>
+
+        <div class="input-field">
+          <label>Mobile Number / User ID</label>
+          <input type="text" id="loginMobile" placeholder="e.g. 9876543210" value="9876543210" required>
+        </div>
+
+        <div class="input-field">
+          <label>Admin Password</label>
+          <input type="password" id="loginPassword" placeholder="••••••••" value="Admin@123" required>
+        </div>
+
+        <button type="submit" class="btn-primary" id="btnLogin" style="margin-top: 10px; width: 100%; padding: 12px; font-size: 13px;">
+          <i data-lucide="lock" style="width: 14px; height: 14px; margin-right: 6px;"></i>
+          Sign In to Gateway
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- 2. MAIN DASHBOARD VIEW (ACCESSIBLE ONLY AFTER LOGIN)                      -->
+  <!-- ========================================================================= -->
+  <div class="app-container" id="dashboardView" style="display: none;">
     <!-- Sidebar Navigation -->
     <aside class="nav-sidebar">
       <div>
+        <!-- User Profile Card -->
+        <div class="nav-user-badge">
+          <div class="user-avatar" id="sidebarAvatar">A</div>
+          <div class="user-meta">
+            <div class="user-name" id="sidebarUserName">Manager</div>
+            <div class="user-role" id="sidebarUserRole">SUPER ADMIN</div>
+          </div>
+          <button id="btnLogout" title="Logout" style="background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 4px;">
+            <i data-lucide="log-out" style="width: 14px; height: 14px;"></i>
+          </button>
+        </div>
+
         <div class="nav-group-label">Operations</div>
         <div class="nav-item active" data-tab="tab-sync">
           <i data-lucide="zap" style="width: 16px; height: 16px;"></i>
@@ -36,7 +89,7 @@
         <div class="nav-item" data-tab="tab-punches">
           <i data-lucide="clipboard-list" style="width: 16px; height: 16px;"></i>
           <span>Attendance Punches</span>
-          <span class="nav-badge" id="badgePunches">100</span>
+          <span class="nav-badge" id="badgePunches">0</span>
         </div>
         <div class="nav-item" data-tab="tab-audit">
           <i data-lucide="shield-check" style="width: 16px; height: 16px;"></i>
@@ -66,19 +119,57 @@
       
       <!-- TAB 1: LIVE SYNC HUB -->
       <section id="tab-sync" class="tab-pane active">
-        <!-- Hero Sync Orbital Card -->
-        <div class="card sync-hero-card">
-          <div class="sync-orbital-btn" id="btnOrbitalSync" title="Click to PULL from biometric terminal and sync to cloud">
-            <div class="orbital-ring"></div>
-            <i data-lucide="refresh-cw" id="syncIcon" style="width: 38px; height: 38px; margin-bottom: 6px;"></i>
-            <span style="font-size: 13px; font-weight: 900; letter-spacing: -0.2px;">SYNC NOW</span>
-            <span style="font-size: 9px; opacity: 0.8; font-weight: 700;">Native TCP Pull</span>
+        
+        <!-- Intelligent Missing Dates Gap Analysis Banner -->
+        <div class="gap-analysis-banner" id="gapBanner" style="display: none;">
+          <div style="width: 36px; height: 36px; border-radius: 10px; background: rgba(6, 182, 212, 0.2); display: flex; align-items: center; justify-content: center; color: #38bdf8; shrink: 0;">
+            <i data-lucide="history" style="width: 20px; height: 20px;"></i>
+          </div>
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <h3 style="font-size: 13px; font-weight: 800; color: #fff;">Intelligent Date Gap Recovery</h3>
+              <span style="font-size: 10px; font-weight: 700; color: #38bdf8; background: rgba(6, 182, 212, 0.15); padding: 2px 8px; border-radius: 10px;" id="gapStatsBadge">7 Missing Dates Found</span>
+            </div>
+            <p style="font-size: 11px; color: var(--text-muted); margin-top: 2px;" id="gapDescText">
+              Device records retrieved across all missing calendar dates while offline. Click any date below to inspect:
+            </p>
+            <div class="gap-date-pills" id="gapDatePills">
+              <!-- Dynamically populated date badges -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Two-Step Pull & Push Action Hero Grid -->
+        <div class="action-hero-grid">
+          <!-- Step 1: PULL FROM HARDWARE -->
+          <div class="step-card active-step">
+            <div style="font-size: 11px; font-weight: 800; color: #38bdf8; text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px;">
+              Step 1 • Hardware Inspection
+            </div>
+            <h3 style="font-size: 15px; font-weight: 800; color: #fff; margin-bottom: 6px;">Pull Records from Device</h3>
+            <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">
+              Connects over TCP to 192.168.29.83:5005, dumps all accumulated punch EEPROM memory, and recovers missing dates.
+            </p>
+            <button class="btn-action-step btn-pull" id="btnPullHardware">
+              <i data-lucide="download" id="pullIcon" style="width: 16px; height: 16px;"></i>
+              <span id="pullBtnText">📥 Pull From Hardware</span>
+            </button>
           </div>
 
-          <h2 style="font-size: 18px; font-weight: 800; color: #fff; margin-bottom: 4px;">Hardware to Cloud Gateway</h2>
-          <p style="font-size: 12px; color: var(--text-muted); max-width: 480px; margin: 0 auto;">
-            Pulls all general punch logs and administrative audit trails from the Secureye device memory and synchronizes them to your cloud HRMS suite.
-          </p>
+          <!-- Step 2: SYNC TO CLOUD SERVER -->
+          <div class="step-card">
+            <div style="font-size: 11px; font-weight: 800; color: var(--primary); text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px;">
+              Step 2 • Cloud Sync
+            </div>
+            <h3 style="font-size: 15px; font-weight: 800; color: #fff; margin-bottom: 6px;">Sync & Commit to Cloud</h3>
+            <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 16px;">
+              Sends inspected attendance logs to your cloud server (<span id="cloudTargetLabel" style="color: #38bdf8;">http://localhost:3000</span>) for processing.
+            </p>
+            <button class="btn-action-step btn-sync-cloud" id="btnPushCloud" disabled>
+              <i data-lucide="cloud-upload" id="syncIcon" style="width: 16px; height: 16px;"></i>
+              <span id="syncBtnText">⚡ Push to Cloud Server</span>
+            </button>
+          </div>
         </div>
 
         <!-- 4 Quick Stats -->
@@ -89,14 +180,14 @@
             <div style="font-size: 10px; color: var(--text-dim); margin-top: 2px;">SN: 102023050002456</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">Pulled Punches</div>
-            <div class="stat-val" style="color: #34d399;" id="cardPunchCount">100</div>
-            <div style="font-size: 10px; color: var(--text-dim); margin-top: 2px;">Stored in memory</div>
+            <div class="stat-label">Inspected Punches</div>
+            <div class="stat-val" style="color: #34d399;" id="cardPunchCount">0</div>
+            <div style="font-size: 10px; color: var(--text-dim); margin-top: 2px;">Ready for review</div>
           </div>
           <div class="stat-card">
-            <div class="stat-label">Registered Users</div>
-            <div class="stat-val" style="color: #fbbf24;" id="cardUserCount">4 Staff</div>
-            <div style="font-size: 10px; color: var(--text-dim); margin-top: 2px;">Active biometric profiles</div>
+            <div class="stat-label">Missing Dates Covered</div>
+            <div class="stat-val" style="color: #fbbf24;" id="cardDaysCount">0 Days</div>
+            <div style="font-size: 10px; color: var(--text-dim); margin-top: 2px;">Auto-gap recovery</div>
           </div>
           <div class="stat-card">
             <div class="stat-label">Socket Ping</div>
@@ -117,19 +208,18 @@
             <button id="btnClearTerm" style="background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 10px;">Clear</button>
           </div>
           <div class="terminal-body" id="termBody">
-            <div class="terminal-line"><span class="term-time">[16:15:00]</span> <span class="term-info">[READY]</span> Native macOS / Windows TCP Socket Bridge initialized.</div>
-            <div class="terminal-line"><span class="term-time">[16:15:01]</span> <span class="term-success">[SOCKET]</span> Connected to 192.168.29.83:5005. Ready to pull records.</div>
+            <div class="terminal-line"><span class="term-time">[Ready]</span> <span class="term-info">[AUTH]</span> Authenticated as Super Administrator. Ready to pull records.</div>
           </div>
         </div>
       </section>
 
-      <!-- TAB 2: ATTENDANCE PUNCHES -->
+      <!-- TAB 2: ATTENDANCE PUNCHES PREVIEW -->
       <section id="tab-punches" class="tab-pane">
         <div class="card">
           <div class="card-header">
             <div class="card-title">
               <i data-lucide="clipboard-list" style="color: #34d399;"></i>
-              <span>Live Attendance Log Memory</span>
+              <span>Inspected Hardware Attendance Memory</span>
             </div>
             <div style="display: flex; gap: 8px;">
               <input type="date" id="punchDateFilter" style="background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 4px 8px; font-size: 11px; color: #fff;">
@@ -149,7 +239,11 @@
                 </tr>
               </thead>
               <tbody id="punchesTbody">
-                <!-- Dynamically populated -->
+                <tr>
+                  <td colspan="5" style="text-align: center; color: var(--text-dim); padding: 32px;">
+                    Click <strong>"Step 1: Pull From Hardware"</strong> to retrieve and preview records.
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
@@ -259,16 +353,6 @@
             <div class="input-field">
               <label>Cloud Webhook URL (Vercel / Online)</label>
               <input type="text" id="cfgCloudUrl" value="http://localhost:3000" placeholder="https://your-hrms.vercel.app">
-            </div>
-            <div class="input-field">
-              <label>Auto-Sync Cadence</label>
-              <select id="cfgInterval">
-                <option value="0">Manual Sync Only (On Click)</option>
-                <option value="300000">Every 5 Minutes</option>
-                <option value="900000" selected>Every 15 Minutes (Recommended)</option>
-                <option value="1800000">Every 30 Minutes</option>
-                <option value="3600000">Every 1 Hour</option>
-              </select>
             </div>
             <div class="input-field">
               <label>Device Serial Number</label>

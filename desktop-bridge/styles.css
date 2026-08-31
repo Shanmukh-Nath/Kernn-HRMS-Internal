@@ -2,9 +2,9 @@
 
 :root {
   --bg-dark: #070a13;
-  --bg-card: rgba(15, 23, 42, 0.65);
-  --bg-card-hover: rgba(30, 41, 59, 0.8);
-  --bg-input: rgba(3, 7, 18, 0.6);
+  --bg-card: rgba(15, 23, 42, 0.7);
+  --bg-card-hover: rgba(30, 41, 59, 0.85);
+  --bg-input: rgba(3, 7, 18, 0.7);
   --border-subtle: rgba(255, 255, 255, 0.08);
   --border-glow: rgba(225, 29, 72, 0.4);
   
@@ -127,7 +127,91 @@ body {
   100% { transform: scale(0.95); opacity: 0.8; }
 }
 
-/* App Main Layout */
+/* ==========================================================================
+   AUTHENTICATION VIEW (STUNNING GLASSMORPHISM LOGIN)
+   ========================================================================== */
+.auth-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: radial-gradient(circle at center, rgba(225, 29, 72, 0.08) 0%, transparent 70%);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 440px;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-lg);
+  padding: 36px 32px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(225, 29, 72, 0.15);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.auth-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--primary-gradient);
+}
+
+.auth-avatar {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  border-radius: 16px;
+  background: var(--primary-gradient);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 24px;
+  box-shadow: 0 0 20px rgba(225, 29, 72, 0.5);
+}
+
+.auth-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.auth-subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 24px;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: left;
+}
+
+.auth-error-banner {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  display: none;
+  margin-bottom: 10px;
+}
+
+/* ==========================================================================
+   MAIN DASHBOARD LAYOUT
+   ========================================================================== */
 .app-container {
   display: flex;
   flex: 1;
@@ -136,7 +220,7 @@ body {
 
 /* Navigation Sidebar */
 .nav-sidebar {
-  width: 220px;
+  width: 230px;
   background: rgba(10, 15, 28, 0.7);
   backdrop-filter: blur(20px);
   border-right: 1px solid var(--border-subtle);
@@ -144,6 +228,51 @@ body {
   flex-direction: column;
   justify-content: space-between;
   padding: 16px 12px;
+}
+
+.nav-user-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--primary-gradient);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.user-meta {
+  flex: 1;
+  overflow: hidden;
+}
+
+.user-name {
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.user-role {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--primary);
+  text-transform: uppercase;
 }
 
 .nav-group-label {
@@ -246,62 +375,106 @@ body {
   gap: 8px;
 }
 
-/* Big Interactive Orbital Sync Button */
-.sync-hero-card {
-  background: linear-gradient(135deg, rgba(225, 29, 72, 0.12) 0%, rgba(15, 23, 42, 0.8) 100%);
-  border: 1px solid rgba(225, 29, 72, 0.3);
-  padding: 32px 24px;
+/* Intelligent Gap Analysis Banner */
+.gap-analysis-banner {
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.12) 0%, rgba(15, 23, 42, 0.9) 100%);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.gap-date-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.date-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: rgba(6, 182, 212, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.date-pill:hover, .date-pill.active {
+  background: #0284c7;
+  color: #fff;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+}
+
+/* Two-Step Action Bar */
+.action-hero-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.step-card {
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 20px;
   text-align: center;
   position: relative;
-  overflow: hidden;
 }
 
-.sync-orbital-btn {
-  position: relative;
-  width: 140px;
-  height: 140px;
-  margin: 0 auto 20px;
-  border-radius: 50%;
-  background: var(--primary-gradient);
+.step-card.active-step {
+  border-color: rgba(225, 29, 72, 0.5);
+  background: linear-gradient(135deg, rgba(225, 29, 72, 0.1) 0%, rgba(15, 23, 42, 0.9) 100%);
+}
+
+.btn-action-step {
+  width: 100%;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 800;
+  border: none;
+  cursor: pointer;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 8px;
+  transition: all 0.3s;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+.btn-pull {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
   color: #fff;
-  cursor: pointer;
-  box-shadow: 0 0 40px rgba(225, 29, 72, 0.5), inset 0 0 20px rgba(255, 255, 255, 0.3);
-  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.sync-orbital-btn:hover {
-  transform: scale(1.08);
-  box-shadow: 0 0 60px rgba(225, 29, 72, 0.75), inset 0 0 25px rgba(255, 255, 255, 0.5);
+.btn-pull:hover {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(2, 132, 199, 0.4);
 }
 
-.sync-orbital-btn:active {
-  transform: scale(0.96);
+.btn-sync-cloud {
+  background: var(--primary-gradient);
+  color: #fff;
 }
 
-.orbital-ring {
-  position: absolute;
-  inset: -12px;
-  border-radius: 50%;
-  border: 2px dashed rgba(225, 29, 72, 0.6);
-  animation: rotateRing 12s linear infinite;
+.btn-sync-cloud:hover:not(:disabled) {
+  background: linear-gradient(135deg, #f43f5e 0%, #be123c 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(225, 29, 72, 0.5);
 }
 
-@keyframes rotateRing {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.syncing-spinner {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+.btn-sync-cloud:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Stats Row */
@@ -372,7 +545,7 @@ body {
 }
 
 .terminal-body {
-  height: 160px;
+  height: 150px;
   padding: 12px 14px;
   overflow-y: auto;
   font-family: 'JetBrains Mono', monospace;
@@ -398,6 +571,7 @@ body {
   overflow-x: auto;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
+  max-height: 400px;
 }
 
 .custom-table {
@@ -408,13 +582,16 @@ body {
 }
 
 .custom-table th {
-  background: rgba(3, 7, 18, 0.7);
+  background: rgba(3, 7, 18, 0.85);
   padding: 12px 16px;
   font-weight: 700;
   color: var(--text-dim);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   border-bottom: 1px solid var(--border-subtle);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .custom-table td {
@@ -501,6 +678,15 @@ body {
 }
 
 @keyframes radarRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.syncing-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
