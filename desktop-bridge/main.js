@@ -8,16 +8,23 @@ try {
   app.setPath('userData', customUserData);
 } catch (_) {}
 
-// Suppress Chromium disk cache locking, shader caches, and stderr noise on Windows
+// Low-End Spec PC Performance & RAM Optimization Flags
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=128'); // Cap V8 heap to 128MB RAM
 app.commandLine.appendSwitch('disable-http-cache');
 app.commandLine.appendSwitch('disk-cache-size', '1');
 app.commandLine.appendSwitch('media-cache-size', '1');
 app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 app.commandLine.appendSwitch('disable-gpu-program-cache');
 app.commandLine.appendSwitch('disable-software-rasterizer');
-app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('enable-zero-copy'); // Low GPU memory bus utilization
+app.commandLine.appendSwitch('enable-low-res-tiling'); // Smooth render on slow integrated graphics
 app.commandLine.appendSwitch('disable-restore-session-state');
 app.commandLine.appendSwitch('disable-background-networking');
+app.commandLine.appendSwitch('disable-breakpad');
+app.commandLine.appendSwitch('disable-component-update');
+app.commandLine.appendSwitch('disable-domain-reliability');
+app.commandLine.appendSwitch('disable-sync');
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion,TranslateUI,AutofillServerCommunication');
 app.commandLine.appendSwitch('log-level', '3');
 
 let mainWindow = null;

@@ -68,12 +68,22 @@ function extractErrorMessage(val) {
   return String(val);
 }
 
-// ─── Lucide Icons ─────────────────────────────────────────────────────────────
+// ─── Performance Helpers for Low-End Hardware ─────────────────────────────
+function debounce(fn, wait = 120) {
+  let timer;
+  return (...args) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn(...args), wait);
+  };
+}
+
+let _iconRaf = null;
 function reIcons() {
-  if (window.lucide) {
-    try {
-      lucide.createIcons();
-    } catch (_) {}
+  if (window.lucide && !_iconRaf) {
+    _iconRaf = requestAnimationFrame(() => {
+      try { lucide.createIcons(); } catch (_) {}
+      _iconRaf = null;
+    });
   }
 }
 window.addEventListener('DOMContentLoaded', () => {
@@ -747,15 +757,14 @@ function initApp() {
   $('btnQuickSyncTop')?.addEventListener('click', executeQuickSync);
   $('btnSyncTimeQuick')?.addEventListener('click', executeRtcTimeSync);
 
-  // Live Searches
-  $('deckSearch')?.addEventListener('input', (e) => {
-    state.searchQuery = e.target.value.trim();
+  // Live Searches (Debounced for Low-Spec CPU Efficiency)
+  const debouncedSearch = debounce((val) => {
+    state.searchQuery = val;
     applyFilters();
-  });
-  $('fullSearch')?.addEventListener('input', (e) => {
-    state.searchQuery = e.target.value.trim();
-    applyFilters();
-  });
+  }, 100);
+
+  $('deckSearch')?.addEventListener('input', (e) => debouncedSearch(e.target.value.trim()));
+  $('fullSearch')?.addEventListener('input', (e) => debouncedSearch(e.target.value.trim()));
 
   // Export Buttons
   $('btnExportCsv')?.addEventListener('click', () => exportToCsv(state.filteredPunches));

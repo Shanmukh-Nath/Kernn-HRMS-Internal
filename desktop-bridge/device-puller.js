@@ -107,6 +107,7 @@ class DevicePuller {
       };
 
       socket.connect(this.port, this.ip, () => {
+        socket.setNoDelay(true);
         sendCmd(Buffer.from('55aa010079195200000000000000e401', 'hex'));
       });
 
