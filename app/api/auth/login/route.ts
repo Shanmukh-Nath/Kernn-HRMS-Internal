@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
     const password = body.password;
 
     if (!mobileNumber || !password) {
+      console.warn('[AUTH_LOGIN] Missing credentials in payload:', { hasMobile: !!mobileNumber, hasPassword: !!password });
       return NextResponse.json(
         { success: false, error: { code: 'INVALID_INPUT', message: 'Mobile number and password are required' } },
         { status: 400 }
@@ -19,6 +20,7 @@ export async function POST(req: NextRequest) {
 
     const user = await findUserByMobile(mobileNumber);
     if (!user) {
+      console.warn(`[AUTH_LOGIN] User not found for mobile: ${mobileNumber}`);
       return NextResponse.json(
         { success: false, error: { code: 'INVALID_CREDENTIALS', message: 'No account found with this mobile number' } },
         { status: 401 }
@@ -27,6 +29,7 @@ export async function POST(req: NextRequest) {
 
     const isValid = verifyPassword(password, user.passwordHash);
     if (!isValid) {
+      console.warn(`[AUTH_LOGIN] Invalid password attempt for mobile: ${mobileNumber}`);
       return NextResponse.json(
         { success: false, error: { code: 'INVALID_CREDENTIALS', message: 'Incorrect password' } },
         { status: 401 }
@@ -34,6 +37,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (user.status !== 'ACTIVE') {
+      console.warn(`[AUTH_LOGIN] Inactive/suspended user tried to login: ${mobileNumber} (status: ${user.status})`);
       return NextResponse.json(
         { success: false, error: { code: 'ACCOUNT_SUSPENDED', message: 'Your account is suspended. Please contact HR.' } },
         { status: 403 }
@@ -54,6 +58,7 @@ export async function POST(req: NextRequest) {
     };
 
     const token = createSessionToken(sessionPayload);
+    console.log(`[AUTH_LOGIN] User logged in successfully: ${user.name} (${user.mobileNumber}) [Role: ${user.role}]`);
 
     const response = NextResponse.json({
       success: true,
@@ -78,6 +83,7 @@ export async function POST(req: NextRequest) {
 
     return response;
   } catch (err: any) {
+    console.error('[AUTH_LOGIN_ERROR] Exception occurred during login:', err);
     return NextResponse.json(
       { success: false, error: { code: 'LOGIN_ERROR', message: err.message } },
       { status: 500 }

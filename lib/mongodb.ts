@@ -8,38 +8,36 @@ try {
   // Ignore in environments where custom DNS cannot be set
 }
 
-const DEFAULT_URI = 'mongodb+srv://shanmukh733_db_user:AnI6iW5d3bdIsaSV@hrmsprod.baj7suy.mongodb.net/secureye_hrms?appName=HRMSProd';
+const DIRECT_URI = 'mongodb://shanmukh733_db_user:AnI6iW5d3bdIsaSV@ac-grloq8u-shard-00-00.baj7suy.mongodb.net:27017,ac-grloq8u-shard-00-01.baj7suy.mongodb.net:27017,ac-grloq8u-shard-00-02.baj7suy.mongodb.net:27017/secureye_hrms?ssl=true&authSource=admin&retryWrites=true&w=majority&appName=HRMSProd';
 
-const uri = process.env.MONGODB_URI || process.env.DATABASE_URL || DEFAULT_URI;
+const uri = process.env.MONGODB_URI || process.env.DATABASE_URL || DIRECT_URI;
 
 declare global {
   // eslint-disable-next-line no-var
   var _mongoClientPromise: Promise<MongoClient> | undefined;
+  // eslint-disable-next-line no-var
+  var _mongoClientInstance: MongoClient | undefined;
 }
 
-let clientPromise: Promise<MongoClient>;
-
-if (process.env.NODE_ENV === 'development') {
-  if (!global._mongoClientPromise) {
-    const client = new MongoClient(uri, {
-      maxPoolSize: 10,
-      minPoolSize: 2,
-      serverSelectionTimeoutMS: 15000,
-    });
-    global._mongoClientPromise = client.connect();
-  }
-  clientPromise = global._mongoClientPromise;
-} else {
-  const client = new MongoClient(uri, {
+function createClient(): MongoClient {
+  return new MongoClient(uri, {
     maxPoolSize: 20,
-    minPoolSize: 5,
+    minPoolSize: 2,
     serverSelectionTimeoutMS: 15000,
   });
-  clientPromise = client.connect();
 }
 
 export async function getMongoClient(): Promise<MongoClient> {
-  return clientPromise;
+  if (!global._mongoClientPromise) {
+    const client = createClient();
+    global._mongoClientInstance = client;
+    global._mongoClientPromise = client.connect().catch((err) => {
+      // Clear cached promise on failure so next call retries fresh
+      global._mongoClientPromise = undefined;
+      throw err;
+    });
+  }
+  return global._mongoClientPromise;
 }
 
 export async function getMongoDb(dbName = 'secureye_hrms'): Promise<Db> {
