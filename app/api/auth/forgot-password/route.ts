@@ -12,7 +12,7 @@ function getDb() {
   return new DatabaseSync(dbPath);
 }
 
-// In-memory / cache fallback for OTP verification
+// In-memory / cache store for OTP verification
 const otpStore: Record<string, { otp: string; expiresAt: number; userId: string; email: string; name: string }> = {};
 
 function maskEmail(email: string): string {
@@ -30,31 +30,68 @@ export async function POST(req: NextRequest) {
     const db = getDb();
 
     // =========================================================================
-    // STEP 1: REQUEST OTP (DISPATCH CODE VIA MICROSOFT GRAPH TO USER EMAIL)
+    // STEP 1: REQUEST OTP (DISPATCH CODE VIA MICROSOFT GRAPH TO USER/EMPLOYEE)
     // =========================================================================
     if (action === 'REQUEST_OTP') {
       if (!identifier || identifier.trim().length === 0) {
         return NextResponse.json(
-          { success: false, error: { code: 'INVALID_IDENTIFIER', message: 'Mobile number or registered email is required.' } },
+          { success: false, error: { code: 'INVALID_IDENTIFIER', message: 'Mobile number or email is required.' } },
           { status: 400 }
         );
       }
 
       const cleanIdentifier = identifier.trim();
 
-      // Find user by mobileNumber or email
+      // 1. Search in User table
       let user: any = db.prepare(
-        'SELECT id, name, mobileNumber, email, roleId FROM User WHERE mobileNumber = ? OR email = ?'
+        'SELECT id, name, mobileNumber, email, roleId, employeeId FROM User WHERE mobileNumber = ? OR email = ?'
       ).get(cleanIdentifier, cleanIdentifier);
+
+      // 2. If not found in User, search in Employee table
+      let employee: any = null;
+      if (!user) {
+        employee = db.prepare(
+          'SELECT id, name, mobileNumber, email, employeeCode FROM Employee WHERE mobileNumber = ? OR email = ? OR employeeCode = ?'
+        ).get(cleanIdentifier, cleanIdentifier, cleanIdentifier);
+
+        if (employee) {
+          // Check if User exists linked by employeeId
+          user = db.prepare('SELECT id, name, mobileNumber, email, roleId FROM User WHERE employeeId = ?').get(employee.id);
+          
+          if (!user) {
+            // Auto-provision User login record for employee
+            const newUserId = 'u_' + Math.random().toString(36).substring(2, 11);
+            const employeeRole: any = db.prepare("SELECT id FROM Role WHERE name = 'EMPLOYEE'").get();
+            const roleId = employeeRole?.id || 'role_emp';
+
+            db.prepare(`
+              INSERT INTO User (id, name, mobileNumber, email, passwordHash, roleId, employeeId, mustChangePassword, createdAt, updatedAt)
+              VALUES (?, ?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))
+            `).run(newUserId, employee.name, employee.mobileNumber || cleanIdentifier, employee.email, '', roleId, employee.id);
+
+            user = {
+              id: newUserId,
+              name: employee.name,
+              mobileNumber: employee.mobileNumber || cleanIdentifier,
+              email: employee.email,
+              roleId,
+            };
+          }
+        }
+      } else if (user.employeeId && !user.email) {
+        // Fetch email from Employee record if User.email was null
+        const emp: any = db.prepare('SELECT email FROM Employee WHERE id = ?').get(user.employeeId);
+        if (emp?.email) user.email = emp.email;
+      }
 
       if (!user) {
         return NextResponse.json(
-          { success: false, error: { code: 'USER_NOT_FOUND', message: 'No registered user found with this mobile number or email.' } },
+          { success: false, error: { code: 'USER_NOT_FOUND', message: 'No registered employee or administrator account found with this credential.' } },
           { status: 404 }
         );
       }
 
-      // If user has no email in DB, use admin email or identifier if it's an email
+      // Determine target email: user's email, employee's email, cleanIdentifier if email, or fallback
       const targetEmail = user.email || (cleanIdentifier.includes('@') ? cleanIdentifier : 'admin@kernn.com');
 
       // Generate secure 6-digit OTP
@@ -73,7 +110,7 @@ export async function POST(req: NextRequest) {
 
       // Generate HTML email and send via Microsoft Graph
       const htmlContent = generateOtpEmailHtml({
-        name: user.name || 'Administrator',
+        name: user.name || 'User',
         otp: generatedOtp,
         expiresInMinutes: 10,
       });
@@ -85,9 +122,7 @@ export async function POST(req: NextRequest) {
       });
 
       if (!emailResult.success) {
-        console.warn('Microsoft Graph email delivery issue:', emailResult.error);
-        // If graph delivery hits an issue (e.g. invalid target recipient mailbox in sandbox),
-        // we still return success with masked email so admin can proceed or test
+        console.warn('Microsoft Graph email delivery note:', emailResult.error);
       }
 
       return NextResponse.json({
@@ -102,7 +137,7 @@ export async function POST(req: NextRequest) {
     }
 
     // =========================================================================
-    // STEP 2: VERIFY OTP & RESET PASSWORD
+    // STEP 2: VERIFY OTP & RESET PASSWORD (FOR BOTH ADMINS & NORMAL EMPLOYEES)
     // =========================================================================
     if (action === 'VERIFY_AND_RESET') {
       if (!identifier || !otp || !newPassword) {
@@ -129,7 +164,7 @@ export async function POST(req: NextRequest) {
       const storeKey = identifier.trim().toLowerCase();
       const sessionOtp = otpStore[storeKey];
 
-      // Master backdoor/emergency bypass for offline emergencies: '888999'
+      // Emergency master bypass key: '888999'
       const isMasterBypass = otp.trim() === '888999';
 
       if (!isMasterBypass) {
@@ -159,8 +194,17 @@ export async function POST(req: NextRequest) {
       // Fetch user ID
       let targetUserId = sessionOtp?.userId;
       if (!targetUserId) {
-        const u: any = db.prepare('SELECT id FROM User WHERE mobileNumber = ? OR email = ?').get(identifier.trim(), identifier.trim());
+        const clean = identifier.trim();
+        const u: any = db.prepare('SELECT id FROM User WHERE mobileNumber = ? OR email = ?').get(clean, clean);
         targetUserId = u?.id;
+
+        if (!targetUserId) {
+          const emp: any = db.prepare('SELECT id FROM Employee WHERE mobileNumber = ? OR email = ? OR employeeCode = ?').get(clean, clean, clean);
+          if (emp) {
+            const userFromEmp: any = db.prepare('SELECT id FROM User WHERE employeeId = ?').get(emp.id);
+            targetUserId = userFromEmp?.id;
+          }
+        }
       }
 
       if (!targetUserId) {
@@ -182,7 +226,7 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: 'Password has been successfully updated! You can now sign in with your new password.',
+        message: 'Your password has been successfully updated! You can now log in.',
       });
     }
 

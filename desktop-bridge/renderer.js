@@ -179,7 +179,7 @@ async function executePullFromHardware() {
 
       // Enable Step 2 Push Button
       pushBtn.disabled = false;
-      syncBtnText.innerText = `⚡ Push ${cachedPunches.length} Records to Cloud`;
+      syncBtnText.innerText = `Push ${cachedPunches.length} Records to Cloud`;
       document.getElementById('topStatusText').innerText = `Inspected ${cachedPunches.length} Records • Awaiting Sync`;
     } else {
       termLog('ERROR', `Pull failed: ${pullRes.error || 'Connection timed out'}`);
@@ -189,7 +189,7 @@ async function executePullFromHardware() {
   } finally {
     pullBtn.style.pointerEvents = 'auto';
     pullIcon.classList.remove('syncing-spinner');
-    pullBtnText.innerText = '📥 Pull From Hardware';
+    pullBtnText.innerText = 'Pull From Hardware';
   }
 }
 
@@ -225,7 +225,7 @@ async function executePushToCloud() {
     if (cloudRes.success) {
       termLog('SUCCESS', `Cloud Sync Complete! Server: ${cloudRes.message || 'Processed successfully'}`);
       document.getElementById('topStatusText').innerText = `Fully Synced (${cachedPunches.length} Punches) • Online`;
-      syncBtnText.innerText = '✓ Cloud Sync Confirmed';
+      syncBtnText.innerText = 'Cloud Sync Confirmed';
     } else {
       termLog('ERROR', `Cloud push failed: ${cloudRes.error || 'Server error'}`);
       syncBtnText.innerText = 'Retry Cloud Push';
