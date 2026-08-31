@@ -3,186 +3,290 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Kernn Sync Bridge - Biometric Terminal Gateway</title>
-  <style>
-    :root {
-      --bg: #090d16;
-      --card-bg: #111827;
-      --border: #1f2937;
-      --primary: #a92427;
-      --primary-hover: #8e1d20;
-      --text: #f3f4f6;
-      --text-muted: #9ca3af;
-      --success: #10b981;
-      --warning: #f59e0b;
-      --danger: #ef4444;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
-    body { background-color: var(--bg); color: var(--text); padding: 24px; font-size: 13px; line-height: 1.5; }
-    .container { max-width: 760px; margin: 0 auto; }
-    .header { display: flex; align-items: center; justify-content: space-between; border-b: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 20px; }
-    .logo-area { display: flex; align-items: center; gap: 12px; }
-    .logo-badge { width: 36px; height: 36px; background: linear-gradient(135deg, #a92427, #3b0b0c); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-weight: 900; color: #fff; font-size: 18px; border: 1px solid rgba(255,255,255,0.1); }
-    .header-title h1 { font-size: 16px; font-weight: 800; color: #fff; letter-spacing: -0.3px; }
-    .header-title p { font-size: 11px; color: var(--text-muted); }
-    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 16px; padding: 18px; margin-bottom: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
-    .card-title { font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
-    .stat-box { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 12px; }
-    .stat-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; }
-    .stat-val { font-size: 16px; font-weight: 800; color: #fff; font-family: ui-monospace, SFMono-Regular, monospace; margin-top: 4px; }
-    .status-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; }
-    .status-online { background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.3); }
-    .status-offline { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-    .pulse { animation: pulse 1.5s infinite; }
-    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
-    .btn { background: var(--primary); color: #fff; border: none; padding: 10px 16px; border-radius: 10px; font-weight: 700; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; }
-    .btn:hover { background: var(--primary-hover); transform: translateY(-1px); }
-    .btn-secondary { background: rgba(255,255,255,0.08); color: var(--text); border: 1px solid var(--border); }
-    .btn-secondary:hover { background: rgba(255,255,255,0.14); }
-    .btn-block { width: 100%; justify-content: center; padding: 12px; font-size: 13px; }
-    .input-group { margin-bottom: 12px; }
-    .input-group label { display: block; font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px; }
-    .input-group input, .input-group select { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: #fff; font-size: 12px; outline: none; }
-    .input-group input:focus, .input-group select:focus { border-color: var(--primary); }
-    .log-terminal { background: #000; border: 1px solid var(--border); border-radius: 12px; padding: 12px; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11px; color: #34d399; height: 160px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
-  </style>
+  <title>Kernn Sync Bridge - Biometric Hardware Gateway</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
-  <div class="container">
-    <!-- Header -->
-    <div class="header">
-      <div class="logo-area">
-        <div class="logo-badge">K</div>
-        <div class="header-title">
-          <h1>Kernn Desktop Sync Bridge</h1>
-          <p>Local Biometric Hardware to Cloud Gateway (macOS & Windows)</p>
-        </div>
-      </div>
-      <div id="statusBadge" class="status-badge status-offline">
-        <span class="dot"></span>
-        <span id="statusText">Checking Device...</span>
-      </div>
+  <!-- Window Titlebar -->
+  <header class="titlebar">
+    <div class="titlebar-brand">
+      <div class="brand-icon">K</div>
+      <span class="brand-name">Kernn Sync Bridge</span>
+      <span class="brand-version">v1.0.0 PRO</span>
     </div>
 
-    <!-- Active Hardware & Cloud Overview -->
-    <div class="grid-3" style="margin-bottom: 16px;">
-      <div class="stat-box">
-        <div class="stat-label">Biometric Terminal IP</div>
-        <div class="stat-val" id="dispIp">192.168.1.201</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-label">Communication Port</div>
-        <div class="stat-val" id="dispPort">5005</div>
-      </div>
-      <div class="stat-box">
-        <div class="stat-label">Last Synced Logs</div>
-        <div class="stat-val" id="dispLogs">0 Punches</div>
-      </div>
+    <div class="device-status-pill" id="topStatusPill">
+      <span class="status-dot"></span>
+      <span id="topStatusText">Terminal Ready (192.168.29.83:5005)</span>
     </div>
+  </header>
 
-    <!-- Main Controls Card -->
-    <div class="card">
-      <div class="card-title">
-        <span>Hardware Synchronization Control</span>
-        <span style="font-size: 10px; color: #34d399;">Active Mode: TCP Socket Pull</span>
-      </div>
+  <!-- App Layout -->
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <aside class="nav-sidebar">
+      <div>
+        <div class="nav-group-label">Operations</div>
+        <div class="nav-item active" data-tab="tab-sync">
+          <i data-lucide="zap" style="width: 16px; height: 16px;"></i>
+          <span>Live Sync Hub</span>
+        </div>
+        <div class="nav-item" data-tab="tab-punches">
+          <i data-lucide="clipboard-list" style="width: 16px; height: 16px;"></i>
+          <span>Attendance Punches</span>
+          <span class="nav-badge" id="badgePunches">100</span>
+        </div>
+        <div class="nav-item" data-tab="tab-audit">
+          <i data-lucide="shield-check" style="width: 16px; height: 16px;"></i>
+          <span>Hardware Audit</span>
+        </div>
+        <div class="nav-item" data-tab="tab-scanner">
+          <i data-lucide="radar" style="width: 16px; height: 16px;"></i>
+          <span>Wi-Fi Scanner</span>
+        </div>
 
-      <div style="display: flex; gap: 10px; margin-bottom: 14px;">
-        <button id="btnSyncNow" class="btn btn-block" style="flex: 2; background: #a92427;">
-          ⚡ PULL FROM TERMINAL & SYNC TO CLOUD
-        </button>
-        <button id="btnScanNet" class="btn btn-secondary" style="flex: 1;">
-          🔍 Scan Local Wi-Fi
-        </button>
-      </div>
-
-      <div class="grid-2">
-        <div class="input-group">
-          <label>Target Cloud Webhook URL</label>
-          <input type="text" id="inputCloudUrl" value="http://localhost:3000" placeholder="https://your-hrms.vercel.app">
-        </div>
-        <div class="input-group">
-          <label>Auto-Sync Interval</label>
-          <select id="selectInterval">
-            <option value="0">Manual Sync Only</option>
-            <option value="300000">Every 5 Minutes</option>
-            <option value="900000" selected>Every 15 Minutes (Recommended)</option>
-            <option value="1800000">Every 30 Minutes</option>
-            <option value="3600000">Every 1 Hour</option>
-          </select>
-        </div>
-      </div>
-    </div>
-
-    <!-- Device Configuration Settings -->
-    <div class="card">
-      <div class="card-title">Device LAN Configuration</div>
-      <div class="grid-3">
-        <div class="input-group">
-          <label>Terminal IP Address</label>
-          <input type="text" id="inputDeviceIp" value="192.168.1.201">
-        </div>
-        <div class="input-group">
-          <label>Socket Port</label>
-          <input type="number" id="inputDevicePort" value="5005">
-        </div>
-        <div class="input-group">
-          <label>Machine ID / Device SN</label>
-          <input type="text" id="inputMachineId" value="1">
+        <div class="nav-group-label" style="margin-top: 20px;">Configuration</div>
+        <div class="nav-item" data-tab="tab-settings">
+          <i data-lucide="sliders" style="width: 16px; height: 16px;"></i>
+          <span>Device & Cloud</span>
         </div>
       </div>
-      <div style="text-align: right;">
-        <button id="btnSaveConfig" class="btn btn-secondary" style="font-size: 11px; padding: 6px 12px;">
-          Save Settings
-        </button>
-      </div>
-    </div>
 
-    <!-- Live Sync Activity Terminal -->
-    <div class="card" style="margin-bottom: 0;">
-      <div class="card-title">
-        <span>Live Communication Log</span>
-        <button id="btnClearLog" style="background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 10px;">Clear Log</button>
+      <!-- Footer Info -->
+      <div style="padding: 10px; border-top: 1px solid var(--border-subtle); font-size: 10px; color: var(--text-dim);">
+        <div>Engine: <strong style="color: var(--text-muted);">Pure TCP Socket</strong></div>
+        <div>Platform: <strong style="color: #38bdf8;" id="platformLabel">macOS Universal</strong></div>
       </div>
-      <div class="log-terminal" id="logTerminal">[Ready] Kernn Desktop Sync Bridge initialized. Click 'Sync Now' to pull attendance logs.</div>
-    </div>
+    </aside>
+
+    <!-- Main Content Panes -->
+    <main class="main-content">
+      
+      <!-- TAB 1: LIVE SYNC HUB -->
+      <section id="tab-sync" class="tab-pane active">
+        <!-- Hero Sync Orbital Card -->
+        <div class="card sync-hero-card">
+          <div class="sync-orbital-btn" id="btnOrbitalSync" title="Click to PULL from biometric terminal and sync to cloud">
+            <div class="orbital-ring"></div>
+            <i data-lucide="refresh-cw" id="syncIcon" style="width: 38px; height: 38px; margin-bottom: 6px;"></i>
+            <span style="font-size: 13px; font-weight: 900; letter-spacing: -0.2px;">SYNC NOW</span>
+            <span style="font-size: 9px; opacity: 0.8; font-weight: 700;">Native TCP Pull</span>
+          </div>
+
+          <h2 style="font-size: 18px; font-weight: 800; color: #fff; margin-bottom: 4px;">Hardware to Cloud Gateway</h2>
+          <p style="font-size: 12px; color: var(--text-muted); max-width: 480px; margin: 0 auto;">
+            Pulls all general punch logs and administrative audit trails from the Secureye device memory and synchronizes them to your cloud HRMS suite.
+          </p>
+        </div>
+
+        <!-- 4 Quick Stats -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-label">Terminal Device</div>
+            <div class="stat-val" style="font-size: 14px; color: #38bdf8;" id="cardDeviceName">Secureye S-FB3K</div>
+            <div style="font-size: 10px; color: var(--text-dim); margin-top: 2px;">SN: 102023050002456</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Pulled Punches</div>
+            <div class="stat-val" style="color: #34d399;" id="cardPunchCount">100</div>
+            <div style="font-size: 10px; color: var(--text-dim); margin-top: 2px;">Stored in memory</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Registered Users</div>
+            <div class="stat-val" style="color: #fbbf24;" id="cardUserCount">4 Staff</div>
+            <div style="font-size: 10px; color: var(--text-dim); margin-top: 2px;">Active biometric profiles</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Socket Ping</div>
+            <div class="stat-val" style="color: #a78bfa;" id="cardPing">4 ms</div>
+            <div style="font-size: 10px; color: var(--text-dim); margin-top: 2px;">Port 5005 Active</div>
+          </div>
+        </div>
+
+        <!-- Live Terminal Stream -->
+        <div class="terminal-window">
+          <div class="terminal-header">
+            <div class="terminal-dots">
+              <span class="terminal-dot" style="background: #ef4444;"></span>
+              <span class="terminal-dot" style="background: #f59e0b;"></span>
+              <span class="terminal-dot" style="background: #10b981;"></span>
+            </div>
+            <span style="font-size: 10px; font-weight: 700; color: var(--text-dim); font-family: 'JetBrains Mono', monospace;">RAW HARDWARE SOCKET MONITOR</span>
+            <button id="btnClearTerm" style="background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: 10px;">Clear</button>
+          </div>
+          <div class="terminal-body" id="termBody">
+            <div class="terminal-line"><span class="term-time">[16:15:00]</span> <span class="term-info">[READY]</span> Native macOS / Windows TCP Socket Bridge initialized.</div>
+            <div class="terminal-line"><span class="term-time">[16:15:01]</span> <span class="term-success">[SOCKET]</span> Connected to 192.168.29.83:5005. Ready to pull records.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: ATTENDANCE PUNCHES -->
+      <section id="tab-punches" class="tab-pane">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <i data-lucide="clipboard-list" style="color: #34d399;"></i>
+              <span>Live Attendance Log Memory</span>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <input type="date" id="punchDateFilter" style="background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 4px 8px; font-size: 11px; color: #fff;">
+              <button class="btn-primary" id="btnFilterPunches" style="padding: 4px 12px; font-size: 11px;">Filter</button>
+            </div>
+          </div>
+
+          <div class="data-table-container">
+            <table class="custom-table" id="tablePunches">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>User ID</th>
+                  <th>Staff Name</th>
+                  <th>Punch Timestamp</th>
+                  <th>Verification Mode</th>
+                </tr>
+              </thead>
+              <tbody id="punchesTbody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: HARDWARE AUDIT LOGS -->
+      <section id="tab-audit" class="tab-pane">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <i data-lucide="shield-check" style="color: #e11d48;"></i>
+              <span>Terminal Supervisory & Admin Audit Trail</span>
+            </div>
+            <span style="font-size: 11px; color: var(--text-dim);">Records physical menu & setting operations</span>
+          </div>
+
+          <div class="data-table-container">
+            <table class="custom-table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Admin ID</th>
+                  <th>Admin Name</th>
+                  <th>Action Event</th>
+                  <th>Affected Target</th>
+                </tr>
+              </thead>
+              <tbody id="auditTbody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: WI-FI SUBNET SCANNER -->
+      <section id="tab-scanner" class="tab-pane">
+        <div class="card" style="text-align: center; padding: 30px;">
+          <div class="radar-screen">
+            <div class="radar-sweep"></div>
+          </div>
+          <h3 style="font-size: 16px; font-weight: 800; color: #fff; margin-bottom: 6px;">Local Wi-Fi Subnet Scanner</h3>
+          <p style="font-size: 12px; color: var(--text-muted); max-width: 420px; margin: 0 auto 16px;">
+            Probes active IP addresses on your local office network (192.168.29.1 to 192.168.29.254) to identify biometric terminals on port 5005.
+          </p>
+          <button class="btn-primary" id="btnStartScan">
+            <i data-lucide="search" style="width: 14px; height: 14px; margin-right: 6px;"></i>
+            Start Network Sweep
+          </button>
+        </div>
+
+        <div class="card" id="scanResultsCard" style="display: none;">
+          <div class="card-header">
+            <div class="card-title">Discovered Hardware Devices</div>
+          </div>
+          <div class="data-table-container">
+            <table class="custom-table">
+              <thead>
+                <tr>
+                  <th>Device IP</th>
+                  <th>Open Port</th>
+                  <th>Model / Protocol</th>
+                  <th>Latency</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="scannerTbody">
+                <tr>
+                  <td><strong style="color: #38bdf8;">192.168.29.83</strong></td>
+                  <td><span style="color: #34d399; font-weight: 700;">5005 (Active)</span></td>
+                  <td>Secureye S-FB3K (Realand SBXPC)</td>
+                  <td>4 ms</td>
+                  <td>
+                    <button class="btn-primary" style="padding: 4px 10px; font-size: 10px;" onclick="connectScannedDevice('192.168.29.83')">Connect</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 5: SETTINGS -->
+      <section id="tab-settings" class="tab-pane">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <i data-lucide="sliders" style="color: #a78bfa;"></i>
+              <span>Hardware & Cloud Gateway Settings</span>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div class="input-field">
+              <label>Terminal LAN IP Address</label>
+              <input type="text" id="cfgIp" value="192.168.29.83">
+            </div>
+            <div class="input-field">
+              <label>Communication Socket Port</label>
+              <input type="number" id="cfgPort" value="5005">
+            </div>
+            <div class="input-field">
+              <label>Machine ID</label>
+              <input type="number" id="cfgMachineId" value="1">
+            </div>
+            <div class="input-field">
+              <label>Cloud Webhook URL (Vercel / Online)</label>
+              <input type="text" id="cfgCloudUrl" value="http://localhost:3000" placeholder="https://your-hrms.vercel.app">
+            </div>
+            <div class="input-field">
+              <label>Auto-Sync Cadence</label>
+              <select id="cfgInterval">
+                <option value="0">Manual Sync Only (On Click)</option>
+                <option value="300000">Every 5 Minutes</option>
+                <option value="900000" selected>Every 15 Minutes (Recommended)</option>
+                <option value="1800000">Every 30 Minutes</option>
+                <option value="3600000">Every 1 Hour</option>
+              </select>
+            </div>
+            <div class="input-field">
+              <label>Device Serial Number</label>
+              <input type="text" id="cfgSn" value="102023050002456" disabled style="opacity: 0.7;">
+            </div>
+          </div>
+
+          <div style="margin-top: 20px; text-align: right;">
+            <button class="btn-primary" id="btnSaveSettings">
+              Save Configuration
+            </button>
+          </div>
+        </div>
+      </section>
+
+    </main>
   </div>
 
-  <script>
-    const logTerminal = document.getElementById('logTerminal');
-    function log(msg) {
-      const time = new Date().toLocaleTimeString();
-      logTerminal.innerText += `\n[${time}] ${msg}`;
-      logTerminal.scrollTop = logTerminal.scrollHeight;
-    }
-
-    document.getElementById('btnClearLog').onclick = () => { logTerminal.innerText = '[Log Cleared]'; };
-
-    document.getElementById('btnSaveConfig').onclick = () => {
-      const ip = document.getElementById('inputDeviceIp').value;
-      const port = document.getElementById('inputDevicePort').value;
-      document.getElementById('dispIp').innerText = ip;
-      document.getElementById('dispPort').innerText = port;
-      log(`Device configuration saved: ${ip}:${port}`);
-    };
-
-    document.getElementById('btnSyncNow').onclick = async () => {
-      const ip = document.getElementById('inputDeviceIp').value;
-      const port = document.getElementById('inputDevicePort').value;
-      const cloud = document.getElementById('inputCloudUrl').value;
-      log(`Connecting to Secureye device at ${ip}:${port} over local network...`);
-      log(`Sending ReadAllGLogData command to pull punch records...`);
-      setTimeout(() => {
-        log(`PULL response received. Syncing payload to cloud at ${cloud}/api/devices/sync/push...`);
-      }, 800);
-    };
-
-    document.getElementById('btnScanNet').onclick = () => {
-      log(`Probing local Wi-Fi subnet (192.168.1.1 - 192.168.1.254)...`);
-    };
-  </script>
+  <script src="renderer.js"></script>
 </body>
 </html>

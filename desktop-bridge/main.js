@@ -1,26 +1,32 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu } = require('electron');
+const { app, BrowserWindow, Menu, Tray } = require('electron');
 const path = require('path');
-const { DevicePuller } = require('./device-puller');
 
 let mainWindow = null;
-let tray = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 820,
-    height: 720,
+    width: 980,
+    height: 740,
+    minWidth: 840,
+    minHeight: 640,
     title: 'Kernn Sync Bridge',
-    backgroundColor: '#090d16',
+    backgroundColor: '#070a13',
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
     },
+    show: false,
   });
 
   mainWindow.loadFile('index.html');
 
-  mainWindow.on('close', (event) => {
-    // If user minimizes on Mac/Windows, keep running in tray if desired
+  mainWindow.once('ready-to-show', () => {
+    mainWindow.show();
+  });
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
   });
 }
 

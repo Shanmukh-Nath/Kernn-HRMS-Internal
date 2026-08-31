@@ -112,3 +112,10 @@ export async function getAuthSession(): Promise<AuthSession | null> {
     return null;
   }
 }
+
+export function hasPermission(session: AuthSession | null, requiredPermission: string): boolean {
+  if (!session) return false;
+  if (session.role === 'SUPER_ADMIN') return true;
+  return session.permissions?.includes(requiredPermission) || false;
+}
+

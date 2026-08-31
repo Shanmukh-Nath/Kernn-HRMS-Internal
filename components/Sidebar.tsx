@@ -23,6 +23,7 @@ import {
   Calendar,
   FileSpreadsheet,
   CheckCircle2,
+  ShieldCheck,
 } from 'lucide-react';
 
 export function Sidebar() {
