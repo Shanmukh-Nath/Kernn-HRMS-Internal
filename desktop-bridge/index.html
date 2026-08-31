@@ -17,13 +17,17 @@
     <span class="tb-ver">v2.0 PRO</span>
   </div>
   <div class="tb-actions">
-    <button class="tb-quick-btn" id="btnSyncTimeQuick" title="Synchronize Terminal RTC Time to PC Clock">
+    <button class="btn-quick-sync" id="btnQuickSyncTop" title="1-Click Pull, Review & Push to Cloud">
+      <i data-lucide="zap" style="width:13px;height:13px"></i>
+      <span>Quick Sync</span>
+    </button>
+    <button class="tb-quick-btn" id="btnSyncTimeQuick" title="Synchronize Terminal RTC Time to Workstation Clock">
       <i data-lucide="clock" style="width:13px;height:13px;color:var(--cyan)"></i>
-      <span>Sync RTC Time</span>
+      <span>Sync RTC</span>
     </button>
     <div class="tb-status" id="topStatus">
       <div class="tb-dot"></div>
-      <span id="topStatusText">Terminal Ready</span>
+      <span id="topStatusText">Gateway Ready</span>
     </div>
   </div>
 </header>
@@ -36,7 +40,7 @@
     </div>
     <div class="pk-title">Enable Device Passkey?</div>
     <div class="pk-sub">
-      Save a secure encrypted passkey on this workstation so you can sign in instantly with one click — without re-entering your password.<br><br>
+      Save an encrypted passkey on this workstation so you can sign in instantly with one click — without re-entering your credentials.<br><br>
       <strong style="color:var(--text-1)">Your credentials never leave this machine.</strong>
     </div>
     <div class="pk-btns">
@@ -126,26 +130,32 @@
 
       <div class="nav-section">Operations</div>
       <div class="nav-item active" data-tab="tab-sync">
-        <i data-lucide="zap" style="width:15px;height:15px"></i>Sync Hub
+        <i data-lucide="zap" style="width:15px;height:15px"></i>
+        <span>Sync Hub</span>
       </div>
       <div class="nav-item" data-tab="tab-punches">
-        <i data-lucide="clipboard-list" style="width:15px;height:15px"></i>Attendance Logs
+        <i data-lucide="clipboard-list" style="width:15px;height:15px"></i>
+        <span>Attendance Logs</span>
         <span class="nav-badge" id="navBadgePunches">0</span>
       </div>
       <div class="nav-item" data-tab="tab-users">
-        <i data-lucide="users" style="width:15px;height:15px"></i>Enrolled Staff
+        <i data-lucide="users" style="width:15px;height:15px"></i>
+        <span>Enrolled Staff</span>
         <span class="nav-badge" id="navBadgeUsers">0</span>
       </div>
       <div class="nav-item" data-tab="tab-audit">
-        <i data-lucide="shield-check" style="width:15px;height:15px"></i>Hardware Audit
+        <i data-lucide="shield-check" style="width:15px;height:15px"></i>
+        <span>Hardware Audit</span>
       </div>
       <div class="nav-item" data-tab="tab-scanner">
-        <i data-lucide="wifi" style="width:15px;height:15px"></i>Network Scan
+        <i data-lucide="wifi" style="width:15px;height:15px"></i>
+        <span>Network Scan</span>
       </div>
 
       <div class="nav-section">Configuration</div>
       <div class="nav-item" data-tab="tab-settings">
-        <i data-lucide="sliders" style="width:15px;height:15px"></i>Device & Cloud
+        <i data-lucide="sliders" style="width:15px;height:15px"></i>
+        <span>Device & Cloud</span>
       </div>
     </div>
 
@@ -285,7 +295,7 @@
           <div class="deck-toolbar">
             <div class="date-pills-row" id="datePillsRow"></div>
             <div class="search-input-wrap">
-              <i data-lucide="search" style="width:13px;height:13px"></i>
+              <span class="search-icon"><i data-lucide="search" style="width:13px;height:13px"></i></span>
               <input type="text" id="deckSearch" placeholder="Search staff or ID...">
             </div>
             <button class="action-tool-btn" id="btnExportCsv" title="Export table to CSV">
@@ -387,7 +397,7 @@
           </div>
           <div class="deck-toolbar">
             <div class="search-input-wrap" style="width:260px">
-              <i data-lucide="search" style="width:13px;height:13px"></i>
+              <span class="search-icon"><i data-lucide="search" style="width:13px;height:13px"></i></span>
               <input type="text" id="fullSearch" placeholder="Filter by name, ID or date...">
             </div>
             <button class="action-tool-btn" id="btnExportFullCsv">
@@ -517,8 +527,8 @@
       <div class="steps-row">
         <!-- Hardware Settings -->
         <div class="step-card">
-          <div class="step-badge text-cyan">Hardware Config</div>
-          <div class="step-title">Secureye Terminal Address</div>
+          <div class="step-badge text-cyan">Hardware & Background Service</div>
+          <div class="step-title">Terminal & Auto-Ping Settings</div>
           <div style="margin-top:14px">
             <div class="field">
               <label>Device IP Address</label>
@@ -532,6 +542,24 @@
               <div class="field">
                 <label>Machine ID</label>
                 <input type="number" id="cfgMachineId" value="1">
+              </div>
+            </div>
+
+            <!-- Background Pings & Startup Toggles -->
+            <div style="margin-top:8px;padding:12px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:var(--radius-md);display:flex;flex-direction:column;gap:10px">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div>
+                  <div style="font-size:12px;font-weight:700;color:#fff">Start on System Boot</div>
+                  <div style="font-size:11px;color:var(--text-3)">Launch minimized to system tray when computer turns on</div>
+                </div>
+                <input type="checkbox" id="chkAutoStart" style="width:16px;height:16px;accent-color:var(--primary);cursor:pointer">
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border);padding-top:10px">
+                <div>
+                  <div style="font-size:12px;font-weight:700;color:#fff">Silent Cloud Heartbeat</div>
+                  <div style="font-size:11px;color:var(--text-3)">Ping terminal every 30s & send telemetry to server</div>
+                </div>
+                <input type="checkbox" id="chkSilentPing" checked style="width:16px;height:16px;accent-color:var(--cyan);cursor:pointer">
               </div>
             </div>
           </div>

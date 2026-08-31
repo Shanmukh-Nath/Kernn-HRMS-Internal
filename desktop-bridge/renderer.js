@@ -1,17 +1,20 @@
 /**
- * KERNN SYNC BRIDGE — Renderer Process v5 (Refreshed Ultra-Clean UI & Features)
+ * KERNN SYNC BRIDGE — Renderer Process v6
  *
  * Features:
+ *   - Auto-start on boot via Electron IPC & System Tray
+ *   - Background silent TCP pings & server heartbeat telemetry
+ *   - 1-Click Quick Sync (Ping -> Pull -> Push in one click)
  *   - Real-time client-side live search & date filter chips
  *   - Instant Export to CSV and Export to JSON backups
  *   - RTC Hardware Time Synchronization
- *   - Collapsible Raw Socket Dock (expandable on click)
- *   - Pure TCP pull → review & search → push selected to Cloud
+ *   - Collapsible Raw Socket Dock
  *   - AES-GCM machine-isolated Passkey Quick Sign-In
  */
 
 'use strict';
 
+const { ipcRenderer } = require('electron');
 const { DevicePuller } = require('./device-puller');
 
 // ─── State ───────────────────────────────────────────────────────────────────
@@ -32,6 +35,8 @@ const state = {
   allAudit:        [],
   termCollapsed:   true,
   logCount:        0,
+  silentPingTimer: null,
+  silentPingActive:true,
 };
 
 // ─── DOM Helpers ─────────────────────────────────────────────────────────────
@@ -65,7 +70,11 @@ function extractErrorMessage(val) {
 
 // ─── Lucide Icons ─────────────────────────────────────────────────────────────
 function reIcons() {
-  if (window.lucide) lucide.createIcons();
+  if (window.lucide) {
+    try {
+      lucide.createIcons();
+    } catch (_) {}
+  }
 }
 window.addEventListener('DOMContentLoaded', () => {
   reIcons();
@@ -195,6 +204,7 @@ function refreshPasskeyUI() {
     if (div)  div.style.display  = 'none';
     if (stat) stat.textContent = 'No passkey saved on this device.';
   }
+  reIcons();
 }
 
 let _pendingMobile = '', _pendingPw = '', _pendingCloud = '';
@@ -274,11 +284,53 @@ function openDashboard() {
   setStatus('Gateway Ready');
   log('ok', `Dashboard ready for ${s.name}`);
   reIcons();
+
+  startSilentHeartbeatLoop();
 }
 
 function updateCloudLabels() {
   if ($('cloudLabel'))      $('cloudLabel').textContent      = state.cloudUrl;
   if ($('deviceAddrLabel')) $('deviceAddrLabel').textContent = `${state.deviceIp}:${state.devicePort}`;
+}
+
+// ─── Background Silent Pings & Heartbeat ──────────────────────────────────────
+function startSilentHeartbeatLoop() {
+  if (state.silentPingTimer) clearInterval(state.silentPingTimer);
+
+  const runHeartbeat = async () => {
+    if (!state.silentPingActive || !state.session?.token) return;
+
+    const puller = new DevicePuller({
+      ip: state.deviceIp,
+      port: state.devicePort,
+      machineId: state.machineId,
+      cloudUrl: state.cloudUrl,
+      authToken: state.session.token,
+    });
+
+    try {
+      const ping = await puller.pingDevice(2500);
+      if (ping.reachable) {
+        if ($('statPing')) $('statPing').textContent = `${ping.latencyMs}ms`;
+        setStatus('Terminal Connected');
+
+        // Send silent telemetry heartbeat to cloud server
+        fetch(`${state.cloudUrl}/api/devices`, {
+          method: 'GET',
+          headers: { Authorization: `Bearer ${state.session.token}` },
+        }).catch(() => {});
+
+        log('sock', `Silent ping: ${state.deviceIp}:${state.devicePort} responded in ${ping.latencyMs}ms`);
+      } else {
+        if ($('statPing')) $('statPing').textContent = 'Unreachable';
+        setStatus('Terminal Offline', false);
+      }
+    } catch (_) {}
+  };
+
+  // Run initial heartbeat immediately, then every 30s
+  runHeartbeat();
+  state.silentPingTimer = setInterval(runHeartbeat, 30000);
 }
 
 // ─── Pull Drawer ──────────────────────────────────────────────────────────────
@@ -288,6 +340,7 @@ window.closeDrawer = () => {
   $('pullDrawer').style.display = 'none';
   pullDrawerOpen = false;
   $('pullBtnText').textContent  = 'Pull From Hardware';
+  reIcons();
 };
 
 window.selectMode = (mode) => {
@@ -296,6 +349,7 @@ window.selectMode = (mode) => {
     p.classList.toggle('active', p.dataset.mode === mode);
   });
   $('rangeRow').style.display = mode === 'RANGE' ? 'grid' : 'none';
+  reIcons();
 };
 
 window.useDevice = (ip) => {
@@ -337,19 +391,16 @@ function buildDateChips() {
 }
 
 function applyFilters() {
-  // 1. Update chip active state
   document.querySelectorAll('.date-chip').forEach(c => {
     c.classList.toggle('active', (c.dataset.date || null) === (state.activeDateFilter || null));
   });
 
   let list = [...state.allPunches];
 
-  // 2. Filter by date chip
   if (state.activeDateFilter) {
     list = list.filter(p => p.timestamp?.slice(0,10) === state.activeDateFilter);
   }
 
-  // 3. Filter by search query
   if (state.searchQuery) {
     const q = state.searchQuery.toLowerCase();
     list = list.filter(p =>
@@ -555,6 +606,50 @@ async function executePush(records, btn) {
   }
 }
 
+// ─── 1-Click Quick Sync (Ping -> Pull -> Push) ────────────────────────────────
+async function executeQuickSync() {
+  const btn = $('btnQuickSyncTop');
+  if (btn) btn.disabled = true;
+  toggleTerminalDock(true);
+  log('sock', '⚡ Quick Sync started: connecting to hardware…');
+  setStatus('Quick Sync Running…', false);
+
+  const puller = new DevicePuller({
+    ip: state.deviceIp, port: state.devicePort,
+    machineId: state.machineId, cloudUrl: state.cloudUrl,
+    authToken: state.session?.token || '',
+  });
+
+  try {
+    const ping = await puller.pingDevice(3000);
+    if (!ping.reachable) throw new Error(`Device unreachable — ${ping.error}`);
+    log('ok', `Terminal online (${ping.latencyMs}ms). Fetching all punch logs…`);
+
+    const result = await puller.pullAttendanceLogs(15000);
+    const punches = result.logs || [];
+    log('ok', `Pulled ${punches.length} records from EEPROM.`);
+
+    state.allPunches = punches;
+    buildDateChips();
+    applyFilters();
+
+    if (punches.length > 0 && state.session?.token) {
+      log('sock', `Committing ${punches.length} records to cloud…`);
+      const pushRes = await puller.pushToCloud(punches, '102023050002456');
+      const ins = pushRes.data?.insertedCount ?? punches.length;
+      log('ok', `⚡ Quick Sync successful! ${ins} records synced to cloud.`);
+      setStatus(`Quick Sync Done (${ins} synced)`);
+    } else {
+      setStatus('Quick Sync Complete');
+    }
+  } catch (err) {
+    log('err', 'Quick Sync error: ' + extractErrorMessage(err));
+    setStatus('Quick Sync Failed', false);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 // ─── RTC Time Sync ────────────────────────────────────────────────────────────
 async function executeRtcTimeSync() {
   const btn = $('btnSyncTimeQuick');
@@ -584,12 +679,37 @@ async function executeRtcTimeSync() {
 
 // ─── App Init ─────────────────────────────────────────────────────────────────
 function initApp() {
-  // Clear any old legacy storage keys
   ['ksynbr_passkey_cred', 'ksynbr_pk_v1', '_authError'].forEach(k => {
     try { localStorage.removeItem(k); } catch(_) {}
   });
   hideAuthError();
   refreshPasskeyUI();
+
+  // Load Auto-Start on Boot status
+  ipcRenderer.invoke('get-autostart-status').then(enabled => {
+    const chk = $('chkAutoStart');
+    if (chk) chk.checked = Boolean(enabled);
+  }).catch(() => {});
+
+  $('chkAutoStart')?.addEventListener('change', (e) => {
+    ipcRenderer.invoke('set-autostart-status', e.target.checked).then(val => {
+      log('ok', `Start on boot ${val ? 'enabled' : 'disabled'}.`);
+    });
+  });
+
+  ipcRenderer.on('autostart-changed', (event, enabled) => {
+    const chk = $('chkAutoStart');
+    if (chk) chk.checked = Boolean(enabled);
+  });
+
+  ipcRenderer.on('trigger-quick-sync', () => {
+    executeQuickSync();
+  });
+
+  $('chkSilentPing')?.addEventListener('change', (e) => {
+    state.silentPingActive = e.target.checked;
+    log('info', `Silent background ping ${e.target.checked ? 'activated' : 'paused'}.`);
+  });
 
   // Date range defaults
   const today = new Date().toISOString().slice(0,10);
@@ -597,7 +717,7 @@ function initApp() {
   const rf = $('rangeFrom'); if (rf) rf.value = week;
   const rt = $('rangeTo');   if (rt) rt.value = today;
 
-  // Terminal Dock Expand/Collapse
+  // Terminal Dock
   $('termDockBar')?.addEventListener('click', (e) => {
     if (e.target.closest('#btnClearTerm')) return;
     toggleTerminalDock();
@@ -610,7 +730,8 @@ function initApp() {
     if ($('termLogCount')) $('termLogCount').textContent = 'Cleared';
   });
 
-  // Quick RTC Time Sync
+  // 1-Click Quick Sync & RTC Time
+  $('btnQuickSyncTop')?.addEventListener('click', executeQuickSync);
   $('btnSyncTimeQuick')?.addEventListener('click', executeRtcTimeSync);
 
   // Live Searches
@@ -707,6 +828,7 @@ function initApp() {
 
   // Logout
   $('btnLogout')?.addEventListener('click', () => {
+    if (state.silentPingTimer) clearInterval(state.silentPingTimer);
     state.session = null;
     state.allPunches = []; state.filteredPunches = [];
     $('dashboardView').classList.remove('visible');
@@ -791,7 +913,6 @@ function initApp() {
       let punches = result.logs || [];
       log('ok', `Extracted ${punches.length} punch records from hardware memory.`);
 
-      // Client-side date filter
       if (state.pullMode === 'TODAY') {
         const today = new Date().toISOString().slice(0,10);
         punches = punches.filter(p => p.timestamp?.slice(0,10) === today);
@@ -808,7 +929,6 @@ function initApp() {
       buildDateChips();
       applyFilters();
 
-      // Extract unique user profiles
       const usersMap = new Map();
       punches.forEach(p => {
         if (p.userId && !usersMap.has(p.userId)) {
@@ -906,6 +1026,7 @@ function initApp() {
         </td>
       </tr>
     `).join('');
+    reIcons();
   });
 
   log('info', `Kernn Sync Bridge ready — ${process.platform} / Electron ${process.versions.electron}`);
