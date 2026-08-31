@@ -474,6 +474,155 @@ export default function EmployeesPage() {
     setTimeout(() => setCopiedResetPass(false), 2000);
   };
 
+  // Download branded Kernn PDF for reset password — amber banner variant
+  const handleDownloadResetPDF = () => {
+    if (!resetResult) return;
+    const { userName, mobileNumber, temporaryPassword } = resetResult;
+    const employeeName = resettingEmployee?.name || userName || 'Employee';
+
+    const canvas = document.createElement('canvas');
+    const dpr = window.devicePixelRatio || 1;
+    const W = 794, H = 560;
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+    const ctx = canvas.getContext('2d')!;
+    ctx.scale(dpr, dpr);
+
+    // Background
+    const bgGrad = ctx.createLinearGradient(0, 0, W, H);
+    bgGrad.addColorStop(0, '#0b1322');
+    bgGrad.addColorStop(1, '#0d1c35');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Left accent strip — amber for reset
+    const stripGrad = ctx.createLinearGradient(0, 0, 0, H);
+    stripGrad.addColorStop(0, '#f59e0b');
+    stripGrad.addColorStop(1, '#b45309');
+    ctx.fillStyle = stripGrad;
+    ctx.fillRect(0, 0, 6, H);
+
+    // Decorative circles
+    ctx.globalAlpha = 0.07;
+    ctx.fillStyle = '#f59e0b';
+    ctx.beginPath(); ctx.arc(W, 0, 180, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(W - 60, H, 140, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // ── RESET BANNER ──────────────────────────────────────────────────────
+    // Amber banner across the top
+    const bannerGrad = ctx.createLinearGradient(0, 0, W, 0);
+    bannerGrad.addColorStop(0, 'rgba(245,158,11,0.22)');
+    bannerGrad.addColorStop(1, 'rgba(245,158,11,0.05)');
+    ctx.fillStyle = bannerGrad;
+    ctx.fillRect(0, 0, W, 48);
+    ctx.fillStyle = 'rgba(245,158,11,0.5)';
+    ctx.fillRect(0, 47, W, 1);  // bottom border of banner
+
+    ctx.font = 'bold 12px Inter, Arial, sans-serif';
+    ctx.fillStyle = '#fbbf24';
+    ctx.fillText('⚠  PASSWORD RESET NOTICE  —  This replaces the employee\'s previous password', 36, 30);
+    // ─────────────────────────────────────────────────────────────────────
+
+    // KERNN logo
+    ctx.font = 'bold 26px Inter, Arial, sans-serif';
+    ctx.fillStyle = '#e11d48';
+    ctx.fillText('KERNN', 36, 82);
+
+    ctx.font = '11px Inter, Arial, sans-serif';
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText('Kernn HRMS · Automations · Secure Employee Portal', 36, 100);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    ctx.fillRect(36, 114, W - 72, 1);
+
+    // Title
+    ctx.font = 'bold 15px Inter, Arial, sans-serif';
+    ctx.fillStyle = '#f0f4ff';
+    ctx.fillText('Admin Password Reset — Updated Credentials', 36, 146);
+    ctx.font = '11px Inter, Arial, sans-serif';
+    ctx.fillStyle = '#64748b';
+    ctx.fillText('CONFIDENTIAL — Share only with the employee. They must change this password on first login.', 36, 166);
+
+    // Card background
+    ctx.fillStyle = 'rgba(255,255,255,0.03)';
+    roundResetRect(ctx, 36, 182, W - 72, 290, 14);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(245,158,11,0.15)';
+    ctx.lineWidth = 1;
+    roundResetRect(ctx, 36, 182, W - 72, 290, 14);
+    ctx.stroke();
+
+    // Fields
+    const fields = [
+      { label: 'Full Name',          value: employeeName },
+      { label: 'Mobile (Username)',   value: mobileNumber },
+      { label: 'New Password',        value: temporaryPassword, highlight: true },
+      { label: 'Portal URL',          value: 'https://hrms.kernn.ai' },
+    ];
+
+    let y = 218;
+    fields.forEach(({ label, value, highlight }) => {
+      ctx.font = '10px Inter, Arial, sans-serif';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText(label.toUpperCase(), 60, y);
+      y += 18;
+
+      if (highlight) {
+        ctx.fillStyle = 'rgba(245,158,11,0.12)';
+        roundResetRect(ctx, 58, y - 14, 320, 24, 6);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(245,158,11,0.3)';
+        ctx.lineWidth = 0.5;
+        roundResetRect(ctx, 58, y - 14, 320, 24, 6);
+        ctx.stroke();
+        ctx.font = 'bold 13px "Courier New", monospace';
+        ctx.fillStyle = '#fbbf24';
+        ctx.fillText(value, 68, y + 4);
+      } else {
+        ctx.font = 'bold 13px Inter, Arial, sans-serif';
+        ctx.fillStyle = '#e2e8f0';
+        ctx.fillText(value, 60, y + 4);
+      }
+      y += 36;
+    });
+
+    // Note box at bottom of card
+    ctx.font = 'italic 10px Inter, Arial, sans-serif';
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillText('Note: This password was reset by an administrator. Employee will be required to change it on next login.', 60, y + 8);
+
+    // Footer
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    ctx.fillRect(0, H - 46, W, 46);
+    ctx.font = '10px Inter, Arial, sans-serif';
+    ctx.fillStyle = '#475569';
+    const now = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+    ctx.fillText(`Reset on: ${now} IST  ·  Kernn Automations Pvt. Ltd.  ·  noreply@kernn.ai`, 36, H - 18);
+
+    // Download
+    const link = document.createElement('a');
+    link.download = `Kernn_PasswordReset_${(employeeName).replace(/\s+/g, '_')}.png`;
+    link.href = canvas.toDataURL('image/png', 1.0);
+    link.click();
+  };
+
+  function roundResetRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
   // Qualification item modifiers
   const addQualification = () => {
     setForm({
@@ -1699,7 +1848,17 @@ export default function EmployeesPage() {
               </form>
             ) : (
               <div className="space-y-4 text-xs">
-                <div className="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 space-y-1">
+                {/* Reset success banner */}
+                <div className="rounded-xl overflow-hidden border border-amber-200">
+                  <div className="bg-amber-500 px-3 py-1.5 flex items-center gap-2">
+                    <span className="text-white font-bold text-[10px] uppercase tracking-widest">⚠ Password Reset Notice</span>
+                  </div>
+                  <div className="p-3 bg-amber-50 text-amber-800 text-[11px] leading-relaxed">
+                    This replaces the employee&apos;s previous password. Download or copy and share directly with the employee.
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 space-y-1">
                   <div className="font-bold flex items-center gap-1.5 text-sm">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                     <span>Password Reset Successful!</span>
@@ -1716,26 +1875,36 @@ export default function EmployeesPage() {
                   </div>
                   <div className="flex justify-between text-slate-500 text-[11px] items-center pt-1.5 border-t border-slate-200">
                     <span>New Password:</span>
-                    <strong className="text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 text-xs">
-                      {resetResult.temporaryPassword}
-                    </strong>
+                    <div className="flex items-center gap-2">
+                      <strong className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 text-xs tracking-wider">
+                        {resetResult.temporaryPassword}
+                      </strong>
+                      <button
+                        onClick={handleCopyResetPassword}
+                        className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-slate-600 transition"
+                      >
+                        {copiedResetPass ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                        <span>{copiedResetPass ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex gap-2 pt-2 border-t border-slate-100">
+                <div className="flex gap-2 pt-1">
                   <button
-                    onClick={handleCopyResetPassword}
-                    className="w-1/2 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold flex items-center justify-center gap-1.5"
+                    onClick={handleDownloadResetPDF}
+                    className="flex-1 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition"
+                    style={{background:'linear-gradient(135deg,#f59e0b,#b45309)',color:'#fff',boxShadow:'0 4px 14px rgba(245,158,11,0.35)'}}
                   >
-                    {copiedResetPass ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedResetPass ? 'Copied!' : 'Copy Password'}</span>
+                    <FileDown className="w-3.5 h-3.5" />
+                    Download PDF
                   </button>
                   <button
                     onClick={() => {
                       setResettingEmployee(null);
                       setResetResult(null);
                     }}
-                    className="w-1/2 py-2 rounded-xl bg-slate-900 text-white font-bold"
+                    className="flex-1 py-2.5 rounded-xl bg-slate-900 text-white font-bold text-xs"
                   >
                     Close
                   </button>
