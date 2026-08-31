@@ -21,16 +21,6 @@ function cuid(): string {
  */
 export async function POST(req: NextRequest) {
   try {
-    const authHeader = req.headers.get('authorization') || '';
-    const session = await getAuthSession();
-
-    // Check if authorized via session cookie or Bearer token
-    if (!session && !authHeader.includes('Bearer')) {
-      // Allow if request contains valid API secret
-      const bodyText = await req.clone().text();
-      // Basic check
-    }
-
     const body = await req.json();
     const { deviceId = 'SFB3K_MAIN', deviceIp = '192.168.1.201', punches = [] } = body;
 
