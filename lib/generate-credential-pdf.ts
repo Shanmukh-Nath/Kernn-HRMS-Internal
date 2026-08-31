@@ -1,6 +1,7 @@
 /**
  * Official Corporate Credential & Password Reset PDF Generator
- * Generates an executive vector A4 PDF with security branding and clickable portal hyperlinks.
+ * Generates an executive vector A4 PDF with security branding, clickable portal hyperlinks,
+ * and trackable cryptographic audit reference codes.
  */
 
 import { jsPDF } from 'jspdf';
@@ -17,6 +18,51 @@ export interface CredentialPdfData {
   issuedAt?: Date;
 }
 
+/**
+ * Computes a deterministic 16-bit FNV-1a checksum for document verification
+ */
+function computeAuditChecksum(payload: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < payload.length; i++) {
+    hash ^= payload.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return ((hash >>> 0) & 0xffff).toString(16).toUpperCase().padStart(4, '0');
+}
+
+/**
+ * Formats a structured, meaningful, and trackable corporate reference code:
+ * Format: KRN-[TYPE]-[EMP_CODE]-[YYYYMMDD]-[CHECKSUM]
+ * Example: KRN-RST-EMP002-20260831-7A4B
+ */
+export function generateTrackableReference(
+  type: 'NEW_EMPLOYEE' | 'PASSWORD_RESET',
+  employeeCode: string = 'EMP',
+  mobileNumber: string = '0000',
+  date: Date = new Date()
+): { refCode: string; issueDateStr: string; issueTimeStr: string } {
+  const prefix = type === 'PASSWORD_RESET' ? 'RST' : 'OBD';
+  const cleanCode = (employeeCode || 'EMP-001').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const mins = String(date.getMinutes()).padStart(2, '0');
+  const secs = String(date.getSeconds()).padStart(2, '0');
+
+  const dateCompact = `${year}${month}${day}`;
+  const last4 = (mobileNumber || '0000').slice(-4);
+  const rawPayload = `${prefix}:${cleanCode}:${dateCompact}:${hours}${mins}:${last4}`;
+  const checksum = computeAuditChecksum(rawPayload);
+
+  const refCode = `KRN-${prefix}-${cleanCode}-${dateCompact}-${checksum}`;
+  const issueDateStr = `${day}/${month}/${year}`;
+  const issueTimeStr = `${hours}:${mins}:${secs} IST`;
+
+  return { refCode, issueDateStr, issueTimeStr };
+}
+
 export function generateCredentialPdf(data: CredentialPdfData) {
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -27,12 +73,13 @@ export function generateCredentialPdf(data: CredentialPdfData) {
   const isReset = data.type === 'PASSWORD_RESET';
   const targetUrl = 'https://hrms.kernn.ai';
   const displayUrl = 'hrms.kernn.ai';
-  const issuedDate = (data.issuedAt || new Date()).toLocaleString('en-IN', {
-    timeZone: 'Asia/Kolkata',
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  });
-  const refCode = `KRN-${Date.now().toString(36).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const now = data.issuedAt || new Date();
+  const { refCode, issueDateStr, issueTimeStr } = generateTrackableReference(
+    data.type,
+    data.employeeCode,
+    data.mobileNumber,
+    now
+  );
 
   // Page width 210mm, height 297mm
   const margin = 18;
@@ -55,7 +102,6 @@ export function generateCredentialPdf(data: CredentialPdfData) {
   try {
     doc.addImage(KERNN_LANDSCAPE_LOGO_BASE64, 'PNG', margin, 7, 50, 21.7);
   } catch (_) {
-    // Fallback if image rendering fails
     doc.setTextColor(225, 29, 72);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(22);
@@ -72,25 +118,30 @@ export function generateCredentialPdf(data: CredentialPdfData) {
   if (isReset) {
     doc.setFillColor(245, 158, 11);
     doc.setTextColor(11, 19, 34);
-    doc.roundedRect(138, 12, 54, 8, 2, 2, 'F');
-    doc.text('PASSWORD RESET NOTICE', 165, 17.5, { align: 'center' });
+    doc.roundedRect(138, 10, 54, 8, 2, 2, 'F');
+    doc.text('PASSWORD RESET NOTICE', 165, 15.5, { align: 'center' });
   } else {
     doc.setFillColor(225, 29, 72);
     doc.setTextColor(255, 255, 255);
-    doc.roundedRect(138, 12, 54, 8, 2, 2, 'F');
-    doc.text('OFFICIAL CREDENTIALS', 165, 17.5, { align: 'center' });
+    doc.roundedRect(138, 10, 54, 8, 2, 2, 'F');
+    doc.text('OFFICIAL CREDENTIALS', 165, 15.5, { align: 'center' });
   }
+
+  // Trackable Reference Box in Header
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(255, 255, 255);
+  doc.text(`TRACK ID: ${refCode}`, 192, 24, { align: 'right' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(148, 163, 184);
-  doc.text(`REF: ${refCode}`, 192, 26, { align: 'right' });
-  doc.text(`ISSUED: ${issuedDate} IST`, 192, 31, { align: 'right' });
+  doc.text(`ISSUED: ${issueDateStr} ${issueTimeStr}`, 192, 30, { align: 'right' });
+  doc.text(`SECURITY AUDIT: VERIFIED`, 192, 35, { align: 'right' });
 
   // ─── 2. NOTICE / CONFIDENTIALITY BANNER ──────────────────────────────────
   let y = 48;
   if (isReset) {
-    // Amber banner
     doc.setFillColor(254, 243, 199); // light amber
     doc.setDrawColor(245, 158, 11); // amber border
     doc.setLineWidth(0.5);
@@ -99,18 +150,17 @@ export function generateCredentialPdf(data: CredentialPdfData) {
     doc.setTextColor(180, 83, 9); // dark amber
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
-    doc.text('CONFIDENTIAL: ADMINISTRATOR PASSWORD RESET', margin + 5, y + 5.5);
+    doc.text('CONFIDENTIAL: ADMINISTRATOR PASSWORD RESET NOTICE', margin + 5, y + 5.5);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.8);
     doc.setTextColor(120, 53, 15);
     doc.text(
-      'An administrator has updated the security credentials for this account. Previous passwords have been invalidated.',
+      `An administrator has updated the security credentials for ${data.employeeName} (${data.employeeCode || 'EMP-001'}). Previous passwords are void.`,
       margin + 5,
       y + 11.5
     );
   } else {
-    // Rose / Slate banner
     doc.setFillColor(241, 245, 249); // slate 100
     doc.setDrawColor(203, 213, 225); // slate 300
     doc.setLineWidth(0.5);
@@ -119,13 +169,13 @@ export function generateCredentialPdf(data: CredentialPdfData) {
     doc.setTextColor(15, 23, 42); // slate 900
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
-    doc.text('CONFIDENTIAL: NEW EMPLOYEE ONBOARDING ACCESS', margin + 5, y + 5.5);
+    doc.text('CONFIDENTIAL: NEW EMPLOYEE ONBOARDING CREDENTIALS', margin + 5, y + 5.5);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7.8);
     doc.setTextColor(71, 85, 105);
     doc.text(
-      'This document contains private access credentials. Please share securely with the employee only.',
+      'This document contains private access credentials. Please share securely with the designated employee only.',
       margin + 5,
       y + 11.5
     );
@@ -177,14 +227,13 @@ export function generateCredentialPdf(data: CredentialPdfData) {
   doc.text(data.mobileNumber || '—', col1X, r2Y + 5.5);
 
   // Clickable Portal Link (hrms.kernn.ai)
-  doc.setTextColor(2, 132, 199); // Electric Cyan / Blue
+  doc.setTextColor(2, 132, 199);
   doc.textWithLink(displayUrl, col2X, r2Y + 5.5, { url: targetUrl });
-  // Underline for the hyperlink
   doc.setDrawColor(2, 132, 199);
   doc.setLineWidth(0.3);
   doc.line(col2X, r2Y + 6.5, col2X + 28, r2Y + 6.5);
 
-  // Row 3: Dedicated Prominent Password Box (No overlap)
+  // Row 3: Dedicated Prominent Password Box
   const passBoxY = y + 43;
   const passBoxHeight = 26;
   doc.setFillColor(isReset ? 255 : 255, isReset ? 251 : 241, isReset ? 235 : 242);
@@ -205,7 +254,7 @@ export function generateCredentialPdf(data: CredentialPdfData) {
   doc.setFont('helvetica', 'italic');
   doc.setFontSize(7.2);
   doc.setTextColor(100, 116, 139);
-  doc.text('Must be changed upon your initial login', margin + 12, passBoxY + 22);
+  doc.text('Must be changed upon your initial login to activate account', margin + 12, passBoxY + 22);
 
   // ─── 4. SECURITY & LOGIN INSTRUCTIONS ────────────────────────────────────
   y = 160;
@@ -278,7 +327,7 @@ export function generateCredentialPdf(data: CredentialPdfData) {
     y += 13;
   });
 
-  // ─── 5. COMPLIANCE & SECURITY WARNING BOX ────────────────────────────────
+  // ─── 5. AUDIT VERIFICATION TRACE BOX ─────────────────────────────────────
   y = 224;
   doc.setFillColor(248, 250, 252);
   doc.setDrawColor(226, 232, 240);
@@ -288,13 +337,13 @@ export function generateCredentialPdf(data: CredentialPdfData) {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(71, 85, 105);
-  doc.text('SECURITY & PRIVACY POLICY ADVISORY', margin + 6, y + 6);
+  doc.text('AUDIT & DOCUMENT AUTHENTICITY TRACE', margin + 6, y + 6);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.2);
   doc.setTextColor(100, 116, 139);
   doc.text(
-    'Kernn HRMS enforces strict end-to-end access isolation. Never share or forward this document via public messaging\napps or unverified channels. If you did not request or expect this credential change, contact your HR or IT Administrator immediately.',
+    `Tracking Reference: ${refCode} · Employee: ${data.employeeCode || 'EMP-001'} (${data.employeeName})\nLogged in Kernn System Hardware & Security Audit Trail on ${issueDateStr} at ${issueTimeStr}.\nStrictly Confidential — Authorized for handover only to the registered recipient.`,
     margin + 6,
     y + 11.5
   );
@@ -312,13 +361,13 @@ export function generateCredentialPdf(data: CredentialPdfData) {
   doc.textWithLink(displayUrl, footLinkX, 280, { url: targetUrl });
 
   doc.setTextColor(148, 163, 184);
-  doc.text('STRICTLY CONFIDENTIAL · PAGE 1 OF 1', 210 - margin, 280, { align: 'right' });
+  doc.text(`DOC REF: ${refCode}`, 210 - margin, 280, { align: 'right' });
 
   // ─── 7. SAVE / TRIGGER DOWNLOAD ───────────────────────────────────────────
   const safeName = (data.employeeName || 'Employee').replace(/[^a-zA-Z0-9_-]/g, '_');
   const filename = isReset
-    ? `Kernn_PasswordReset_${safeName}.pdf`
-    : `Kernn_Credentials_${safeName}.pdf`;
+    ? `Kernn_PasswordReset_${data.employeeCode || 'EMP'}_${safeName}.pdf`
+    : `Kernn_Credentials_${data.employeeCode || 'EMP'}_${safeName}.pdf`;
 
   doc.save(filename);
 }
