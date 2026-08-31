@@ -35,6 +35,7 @@ import {
   Award,
   Eye,
   RefreshCw,
+  FileDown,
 } from 'lucide-react';
 
 const DEPARTMENTS = [
@@ -305,6 +306,135 @@ export default function EmployeesPage() {
     setCopiedPass(true);
     setTimeout(() => setCopiedPass(false), 2000);
   };
+
+  // Generate and download a branded Kernn credential PDF using Canvas
+  const handleDownloadCredentialPDF = () => {
+    if (!createdCredentials) return;
+    const { name, mobileNumber, employeeCode, temporaryPassword } = createdCredentials;
+
+    const canvas = document.createElement('canvas');
+    const dpr = window.devicePixelRatio || 1;
+    const W = 794, H = 520;  // A5-ish landscape
+    canvas.width  = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+    const ctx = canvas.getContext('2d')!;
+    ctx.scale(dpr, dpr);
+
+    // Background gradient
+    const bgGrad = ctx.createLinearGradient(0, 0, W, H);
+    bgGrad.addColorStop(0, '#0b1322');
+    bgGrad.addColorStop(1, '#0d1c35');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, W, H);
+
+    // Left accent strip
+    const stripGrad = ctx.createLinearGradient(0, 0, 0, H);
+    stripGrad.addColorStop(0, '#e11d48');
+    stripGrad.addColorStop(1, '#9f1239');
+    ctx.fillStyle = stripGrad;
+    ctx.fillRect(0, 0, 6, H);
+
+    // Top-right decorative circles
+    ctx.globalAlpha = 0.07;
+    ctx.fillStyle = '#e11d48';
+    ctx.beginPath(); ctx.arc(W, 0, 180, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(W - 60, H, 140, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // KERNN logo text
+    ctx.font = 'bold 28px Inter, Arial, sans-serif';
+    ctx.fillStyle = '#e11d48';
+    ctx.fillText('KERNN', 36, 56);
+
+    // Tagline
+    ctx.font = '11px Inter, Arial, sans-serif';
+    ctx.fillStyle = '#94a3b8';
+    ctx.fillText('Kernn HRMS · Automations · Secure Employee Portal', 36, 76);
+
+    // Horizontal divider
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    ctx.fillRect(36, 90, W - 72, 1);
+
+    // Title block
+    ctx.font = 'bold 15px Inter, Arial, sans-serif';
+    ctx.fillStyle = '#f0f4ff';
+    ctx.fillText('Employee Onboarding Credentials', 36, 122);
+    ctx.font = '11px Inter, Arial, sans-serif';
+    ctx.fillStyle = '#64748b';
+    ctx.fillText('CONFIDENTIAL — Share only with the employee. This document expires on first login.', 36, 142);
+
+    // Card background
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    roundRect(ctx, 36, 160, W - 72, 270, 14);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    roundRect(ctx, 36, 160, W - 72, 270, 14);
+    ctx.stroke();
+
+    // Fields
+    const fields = [
+      { label: 'Full Name',          value: name },
+      { label: 'Employee Code',      value: employeeCode || 'EMP-001' },
+      { label: 'Mobile (Username)',   value: mobileNumber },
+      { label: 'Temporary Password', value: temporaryPassword, highlight: true },
+      { label: 'Portal URL',         value: 'https://hrms.kernn.ai' },
+    ];
+
+    let y = 195;
+    fields.forEach(({ label, value, highlight }) => {
+      ctx.font = '10px Inter, Arial, sans-serif';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText(label.toUpperCase(), 60, y);
+      y += 18;
+
+      if (highlight) {
+        // Password pill background
+        ctx.fillStyle = 'rgba(225,29,72,0.12)';
+        roundRect(ctx, 58, y - 14, 320, 24, 6);
+        ctx.fill();
+        ctx.font = 'bold 13px "Courier New", monospace';
+        ctx.fillStyle = '#fb7185';
+        ctx.fillText(value, 68, y + 4);
+      } else {
+        ctx.font = 'bold 13px Inter, Arial, sans-serif';
+        ctx.fillStyle = '#e2e8f0';
+        ctx.fillText(value, 60, y + 4);
+      }
+      y += 36;
+    });
+
+    // Footer
+    ctx.fillStyle = 'rgba(255,255,255,0.04)';
+    ctx.fillRect(0, H - 46, W, 46);
+    ctx.font = '10px Inter, Arial, sans-serif';
+    ctx.fillStyle = '#475569';
+    const now = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+    ctx.fillText(`Generated: ${now} IST  ·  Kernn Automations Pvt. Ltd.  ·  noreply@kernn.ai`, 36, H - 18);
+
+    // Download
+    const link = document.createElement('a');
+    link.download = `Kernn_Credentials_${(name || 'Employee').replace(/\s+/g, '_')}.png`;
+    link.href = canvas.toDataURL('image/png', 1.0);
+    link.click();
+  };
+
+  // Helper: rounded rect path
+  function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
 
   const handleExecuteResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1617,50 +1747,65 @@ export default function EmployeesPage() {
       )}
 
       {/* ========================================================================= */}
-      {/* CREATED CREDENTIALS ALERT MODAL */}
-      {/* ========================================================================= */}
+      {/* CREATED CREDENTIALS MODAL */}
       {createdCredentials && (
-        <div className="fixed inset-0 z-70 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-8 shadow-2xl space-y-5 animate-scaleUp">
-            <div className="text-center space-y-2">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center">
-                <CheckCircle2 className="w-6 h-6" />
+        <div className="fixed inset-0 z-70 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" style={{animation:'fadeIn 0.2s ease'}}>
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full shadow-2xl overflow-hidden" style={{animation:'scaleUp 0.25s cubic-bezier(0.16,1,0.3,1)'}}>
+
+            {/* Header */}
+            <div className="bg-gradient-to-br from-[#0b1322] to-[#0d1c35] px-8 pt-8 pb-6 text-center relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 rounded-full bg-[#e11d48] opacity-10 translate-x-8 -translate-y-8" />
+              <div className="absolute bottom-0 left-0 w-24 h-24 rounded-full bg-[#e11d48] opacity-5 -translate-x-4 translate-y-4" />
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 mx-auto flex items-center justify-center mb-3 relative">
+                <CheckCircle2 className="w-7 h-7" />
               </div>
-              <h3 className="text-lg font-bold text-slate-900">Employee Onboarded!</h3>
-              <p className="text-xs text-slate-500">
-                User account created with temporary credentials. Employee will be prompted to register their Passkey on first sign-in.
-              </p>
+              <h3 className="text-lg font-bold text-white">Employee Onboarded!</h3>
+              <p className="text-xs text-slate-400 mt-1">Temporary login credentials have been created.</p>
+              <p className="text-xs text-red-400 mt-1 font-medium">Download or copy before closing — not retrievable later.</p>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-slate-400">Employee:</span>
-                <span className="font-bold text-slate-900">{createdCredentials.name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Mobile (Username):</span>
-                <span className="font-mono font-bold text-slate-900">{createdCredentials.mobileNumber}</span>
-              </div>
-              <div className="flex justify-between items-center pt-2 border-t border-slate-200">
-                <span className="text-slate-400">Temp Password:</span>
-                <span className="font-mono font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+            {/* Credential details */}
+            <div className="px-8 py-5 space-y-2 text-xs">
+              {[
+                { label: 'Employee Name', value: createdCredentials.name, mono: false },
+                { label: 'Employee Code', value: createdCredentials.employeeCode, mono: true },
+                { label: 'Mobile (Username)', value: createdCredentials.mobileNumber, mono: true },
+              ].map(({ label, value, mono }) => (
+                <div key={label} className="flex justify-between items-center py-1">
+                  <span className="text-slate-400">{label}:</span>
+                  <span className={`font-bold text-slate-900 ${mono ? 'font-mono' : ''}`}>{value}</span>
+                </div>
+              ))}
+              <div className="mt-3 p-3 rounded-xl bg-rose-50 border border-rose-200">
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500 text-xs">Temporary Password</span>
+                  <button
+                    onClick={handleCopyPassword}
+                    className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 transition"
+                  >
+                    {copiedPass ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedPass ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
+                <div className="font-mono font-bold text-rose-600 text-lg tracking-wider mt-1">
                   {createdCredentials.temporaryPassword}
-                </span>
+                </div>
               </div>
             </div>
 
-            <div className="flex gap-2">
+            {/* Actions */}
+            <div className="px-8 pb-6 flex gap-3">
               <button
-                onClick={handleCopyPassword}
-                className="w-1/2 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition flex items-center justify-center gap-1.5"
+                onClick={handleDownloadCredentialPDF}
+                className="flex-1 py-3 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2"
+                style={{background:'linear-gradient(135deg,#e11d48,#9f1239)',color:'#fff',boxShadow:'0 4px 16px rgba(225,29,72,0.35)'}}
               >
-                {copiedPass ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
-                <span>{copiedPass ? 'Copied!' : 'Copy Password'}</span>
+                <FileDown className="w-4 h-4" />
+                Download PDF
               </button>
-
               <button
                 onClick={() => setCreatedCredentials(null)}
-                className="w-1/2 py-2.5 rounded-xl bg-[#a92427] hover:bg-[#8e1d20] text-white font-bold text-xs transition shadow-xs"
+                className="flex-1 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition"
               >
                 Done
               </button>

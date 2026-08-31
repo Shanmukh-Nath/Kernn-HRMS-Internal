@@ -1,511 +1,812 @@
+/**
+ * KERNN SYNC BRIDGE — Renderer Process
+ *
+ * Passkey: AES-GCM credential encrypted with a machine-specific key, stored
+ *          in localStorage. Completely self-contained — no server call needed
+ *          to verify the passkey; we decrypt the saved credentials and re-login.
+ *
+ * Pull → Review → Push flow:
+ *   1. Pull records from device via TCP (pullAttendanceLogs)
+ *   2. Filter by date chip or date input
+ *   3. Push only the *filtered* set to the cloud
+ */
+
+// ─── IIFE: Run synchronously before DOM ready to clear all stale state ────────
+(function immediateCleanup() {
+  try {
+    // Remove all legacy passkey keys from previous app versions
+    ['ksynbr_passkey_cred', 'ksynbr_pk_v1', '_authError'].forEach(k => {
+      localStorage.removeItem(k);
+    });
+  } catch (_) {}
+
+  // Force-hide authError div immediately if it already has content from
+  // Chromium's session restore (which can replay stale DOM state)
+  try {
+    const el = document.getElementById('authError');
+    if (el) { el.textContent = ''; el.style.display = 'none'; }
+  } catch (_) {}
+})();
+
+'use strict';
+
 const { DevicePuller } = require('./device-puller');
 
-// Global App State
-let config = {
-  ip: '192.168.29.83',
-  port: 5005,
-  machineId: 1,
-  cloudUrl: 'https://kernn-hrms-internal.vercel.app',
-  sessionUser: null,
-  sessionToken: null,
+// ─── State ────────────────────────────────────────────────────────────────────
+const state = {
+  session:          null,
+  cloudUrl:         'https://kernn-hrms-internal.vercel.app',
+  deviceIp:         '192.168.29.83',
+  devicePort:       5005,
+  machineId:        1,
+
+  pullMode:         'ALL',
+  rangeFrom:        null,
+  rangeTo:          null,
+
+  allPunches:       [],
+  filteredPunches:  [],
+  allUsers:         [],
+  allAudit:         [],
 };
 
-let cachedPunches = [];
-let groupedDates = {};
-let selectedPullMode = 'ALL';
-let cachedAuditLogs = [
-  { timestamp: '2026-08-31 15:38:48', adminId: '6', adminName: 'shanmukh nath', action: 'Entered Settings Menu', target: 'Device Global' },
-  { timestamp: '2026-08-28 14:17:20', adminId: '6', adminName: 'shanmukh nath', action: 'Enrolled Face Recognition Profile', target: 'User 3 (test)' },
-  { timestamp: '2026-08-28 10:40:15', adminId: '6', adminName: 'shanmukh nath', action: 'Enrolled Fingerprint Sensor Template', target: 'User 6 (shanmukh nath)' },
-  { timestamp: '2026-08-28 11:25:00', adminId: '2', adminName: 'karthik', action: 'Entered Settings Menu', target: 'Device Global' },
-  { timestamp: '2026-08-28 11:26:10', adminId: '2', adminName: 'karthik', action: 'Enrolled Fingerprint Template', target: 'User 2 (karthik)' },
-  { timestamp: '2026-08-25 09:00:12', adminId: '1', adminName: 'hemanth', action: 'Adjusted Device Internal Clock', target: 'Clock Sync (+0s)' },
-];
+// ─── Tiny DOM helper ──────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
 
-function refreshIcons() {
-  if (window.lucide) {
-    window.lucide.createIcons();
-  }
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function fmtDate(ts) {
+  if (!ts) return '—';
+  try {
+    const d = new Date(ts.includes(' ') ? ts.replace(' ','T')+'Z' : ts);
+    if (isNaN(d)) return ts;
+    return d.toLocaleString('en-IN', { hour12: true });
+  } catch { return ts; }
 }
 
-// Log to Terminal
-function termLog(type, msg) {
-  const body = document.getElementById('termBody');
-  if (!body) return;
+// ─── Lucide Icons ─────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  if (window.lucide) lucide.createIcons();
+  initApp();
+});
 
-  const time = new Date().toLocaleTimeString();
+function reIcons() { if (window.lucide) lucide.createIcons(); }
+
+// ─── Terminal Logger ──────────────────────────────────────────────────────────
+const TERM_PREFIX = { ok:'[OK]', err:'[ERR]', warn:'[WARN]', sock:'[SOCK]', info:'[INFO]' };
+const TERM_CLASS  = { ok:'tc-ok', err:'tc-err', warn:'tc-warn', sock:'tc-sock', info:'tc-time' };
+
+function log(type, msg) {
+  const tb = $('termBody');
+  if (!tb) return;
+  const ts = new Date().toLocaleTimeString('en-US', { hour12: false });
   const line = document.createElement('div');
-  line.className = 'terminal-line';
-
-  let typeClass = 'term-info';
-  let typeLabel = '[INFO]';
-  if (type === 'SUCCESS') { typeClass = 'term-success'; typeLabel = '[SUCCESS]'; }
-  else if (type === 'ERROR') { typeClass = 'term-err'; typeLabel = '[ERROR]'; }
-  else if (type === 'WARN') { typeClass = 'term-warn'; typeLabel = '[WARN]'; }
-  else if (type === 'SOCKET') { typeClass = 'term-info'; typeLabel = '[SOCKET]'; }
-
-  line.innerHTML = `<span class="term-time">[${time}]</span> <span class="${typeClass}">${typeLabel}</span> ${msg}`;
-  body.appendChild(line);
-  body.scrollTop = body.scrollHeight;
+  line.className = 'term-line';
+  line.innerHTML = `<span class="tc-time">${ts}</span> <span class="${TERM_CLASS[type]||''}">${TERM_PREFIX[type]||''}</span> ${escHtml(msg)}`;
+  tb.appendChild(line);
+  tb.scrollTop = tb.scrollHeight;
 }
 
-// Render Attendance Table
-function renderPunchesTable(punches) {
-  const tbody = document.getElementById('punchesTbody');
-  const fullTbody = document.getElementById('punchesFullTbody');
+$('btnClearTerm')?.addEventListener('click', () => { $('termBody').innerHTML = ''; });
 
-  const rowsHtml = punches.length === 0
-    ? '<tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 32px;">No attendance punches in memory for this filter.</td></tr>'
-    : punches.slice(-80).reverse().map((p, idx) => `
-      <tr>
-        <td style="font-family: monospace; color: var(--text-dim);">${idx + 1}</td>
-        <td><span style="font-family: monospace; font-weight: 700; color: #38bdf8;">${p.userId}</span></td>
-        <td><strong style="color: #fff;">${p.name || 'Staff ' + p.userId}</strong></td>
-        <td><span style="font-family: monospace; color: #34d399; font-weight: 700;">${p.timestamp}</span></td>
-        <td><span style="display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.25);">${p.verifyType || 'Fingerprint Sensor'}</span></td>
-      </tr>
-    `).join('');
-
-  if (tbody) tbody.innerHTML = rowsHtml;
-  if (fullTbody) fullTbody.innerHTML = rowsHtml;
+// ─── Top status badge ─────────────────────────────────────────────────────────
+function setStatus(text, ok = true) {
+  const txt = $('topStatusText');
+  const dot = $('topStatus')?.querySelector('.tb-dot');
+  if (txt) txt.textContent = text;
+  if (dot) {
+    dot.style.background  = ok ? '#10b981' : '#f59e0b';
+    dot.style.boxShadow   = ok ? '0 0 8px #10b981' : '0 0 8px #f59e0b';
+  }
 }
 
-// Render Audit Logs Table
-function renderAuditTable() {
-  const deckTbody = document.getElementById('deckAuditTbody');
-  const fullAuditTbody = document.getElementById('auditTbody');
+// ─── Passkey — AES-GCM, machine-specific key ──────────────────────────────────
+const PK_LS_KEY = 'ksynbr_pk_v2';
 
-  const rowsHtml = cachedAuditLogs.map((log) => `
-    <tr>
-      <td style="font-family: monospace; color: #34d399;">${log.timestamp}</td>
-      <td><span style="font-family: monospace; color: #f59e0b; font-weight: 700;">${log.adminId}</span></td>
-      <td><strong style="color: #fff;">${log.adminName}</strong></td>
-      <td><span style="color: #e11d48; font-weight: 600;">${log.action}</span></td>
-      <td><span style="font-family: monospace; font-size: 11px; color: var(--text-dim);">${log.target}</span></td>
-    </tr>
-  `).join('');
+/** Derive a 256-bit key from a machine-specific salt using PBKDF2 */
+async function deriveMachineKey() {
+  const enc = new TextEncoder();
+  const salt = [
+    navigator.userAgent,
+    process.env.COMPUTERNAME || process.env.HOSTNAME || 'local',
+    process.env.USERDOMAIN  || process.env.USER || 'device',
+    'kernn-sync-bridge-v1',
+  ].join('|');
 
-  if (deckTbody) deckTbody.innerHTML = rowsHtml;
-  if (fullAuditTbody) fullAuditTbody.innerHTML = rowsHtml;
+  const keyMat = await crypto.subtle.importKey('raw', enc.encode('kernn-bridge-master'), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt: enc.encode(salt), iterations:100000, hash:'SHA-256' },
+    keyMat,
+    { name:'AES-GCM', length:256 },
+    false,
+    ['encrypt','decrypt']
+  );
 }
 
-// Update Gap Analysis Badges
-function updateGapAnalysis(punches) {
-  groupedDates = {};
-  punches.forEach((p) => {
-    const d = p.timestamp.substring(0, 10);
-    if (!groupedDates[d]) groupedDates[d] = [];
-    groupedDates[d].push(p);
-  });
+async function encryptCredential(mobile, password, cloudUrl) {
+  const key = await deriveMachineKey();
+  const enc = new TextEncoder();
+  const iv  = crypto.getRandomValues(new Uint8Array(12));
+  const plain = JSON.stringify({ mobile, password, cloudUrl });
+  const cipher = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, enc.encode(plain));
+  return {
+    iv:  Array.from(iv),
+    ct:  Array.from(new Uint8Array(cipher)),
+  };
+}
 
-  const distinctDates = Object.keys(groupedDates).sort();
-  const pillsContainer = document.getElementById('gapDatePills');
-  const cardDaysCount = document.getElementById('cardDaysCount');
+async function decryptCredential(stored) {
+  const key = await deriveMachineKey();
+  const iv  = new Uint8Array(stored.iv);
+  const ct  = new Uint8Array(stored.ct);
+  const plain = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, key, ct);
+  return JSON.parse(new TextDecoder().decode(plain));
+}
 
-  if (distinctDates.length > 0 && pillsContainer) {
-    cardDaysCount.innerText = `${distinctDates.length} Days`;
-    pillsContainer.innerHTML = '';
+function getPasskeyStored() {
+  try { return JSON.parse(localStorage.getItem(PK_LS_KEY) || 'null'); }
+  catch { return null; }
+}
+function clearPasskey() { localStorage.removeItem(PK_LS_KEY); }
 
-    // "All Dates" pill
-    const allPill = document.createElement('button');
-    allPill.className = 'date-pill active';
-    allPill.innerText = `All (${punches.length})`;
-    allPill.onclick = () => {
-      document.querySelectorAll('.date-pill').forEach((p) => p.classList.remove('active'));
-      allPill.classList.add('active');
-      renderPunchesTable(cachedPunches);
-    };
-    pillsContainer.appendChild(allPill);
+function refreshPasskeyUI() {
+  const pk  = getPasskeyStored();
+  const btn = $('btnPasskeyLogin');
+  const div = $('authDivider');
+  const stat= $('passkeyStatus');
 
-    // Individual Date Pills
-    distinctDates.forEach((d) => {
-      const pill = document.createElement('button');
-      pill.className = 'date-pill';
-      pill.innerText = `${d} (${groupedDates[d].length})`;
-      pill.onclick = () => {
-        document.querySelectorAll('.date-pill').forEach((p) => p.classList.remove('active'));
-        pill.classList.add('active');
-        renderPunchesTable(groupedDates[d]);
-        termLog('INFO', `Inspecting punches for missing date: [${d}] (${groupedDates[d].length} punches).`);
-      };
-      pillsContainer.appendChild(pill);
+  if (pk?.mobile) {
+    if (btn)  btn.style.display  = 'flex';
+    if (div)  div.style.display  = 'block';
+    if (stat) stat.innerHTML = `Device passkey registered for <strong style="color:var(--text-1)">${escHtml(pk.mobile)}</strong>.<br>Quick Sign-In is available on this machine.`;
+  } else {
+    if (btn)  btn.style.display  = 'none';
+    if (div)  div.style.display  = 'none';
+    if (stat) stat.textContent = 'No passkey saved on this device.';
+  }
+}
+
+// ─── Passkey Registration Modal ───────────────────────────────────────────────
+let _pendingMobile = '', _pendingPw = '', _pendingCloud = '';
+
+function showPasskeyModal() {
+  $('passkeyModal').classList.add('visible');
+  reIcons();
+}
+
+$('btnPasskeySkip')?.addEventListener('click', () => {
+  $('passkeyModal').classList.remove('visible');
+  openDashboard();
+});
+
+$('btnPasskeySave')?.addEventListener('click', async () => {
+  try {
+    const enc = await encryptCredential(_pendingMobile, _pendingPw, _pendingCloud);
+    localStorage.setItem(PK_LS_KEY, JSON.stringify({ mobile: _pendingMobile, ...enc }));
+    log('ok', `Device passkey saved for ${_pendingMobile}. Quick Sign-In is now available.`);
+  } catch (e) {
+    log('err', 'Failed to save passkey: ' + e.message);
+  }
+  _pendingPw = '';
+  $('passkeyModal').classList.remove('visible');
+  openDashboard();
+});
+
+$('btnRegisterPasskeySettings')?.addEventListener('click', showPasskeyModal);
+
+$('btnClearPasskeySettings')?.addEventListener('click', () => {
+  clearPasskey();
+  refreshPasskeyUI();
+  log('warn', 'Device passkey removed.');
+});
+
+// ─── Auth: Password Login ─────────────────────────────────────────────────────
+$('serverSelect')?.addEventListener('change', () => {
+  const v = $('serverSelect').value;
+  const cust = $('serverCustom');
+  if (v === 'custom') { cust.style.display = 'block'; }
+  else { cust.style.display = 'none'; state.cloudUrl = v; $('cloudLabel').textContent = v; }
+});
+
+// Eye toggle
+$('btnEye')?.addEventListener('click', () => {
+  const inp  = $('loginPassword');
+  const icon = $('eyeIcon');
+  const show = inp.type === 'password';
+  inp.type = show ? 'text' : 'password';
+  icon.setAttribute('data-lucide', show ? 'eye-off' : 'eye');
+  reIcons();
+});
+
+$('loginForm')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const mobile   = $('loginMobile').value.trim();
+  const password = $('loginPassword').value;
+  let   cloudUrl = $('serverSelect').value === 'custom'
+    ? $('serverCustom').value.trim()
+    : $('serverSelect').value;
+  if (!cloudUrl) cloudUrl = 'https://kernn-hrms-internal.vercel.app';
+  state.cloudUrl = cloudUrl;
+
+  if (!mobile || !password) { showAuthError('Please fill in all fields.'); return; }
+
+  await doPasswordLogin(mobile, password, cloudUrl, $('chkRemember').checked);
+});
+
+async function doPasswordLogin(mobile, password, cloudUrl, askPasskey = false) {
+  const btn = $('btnLogin');
+  if (btn) btn.disabled = true;
+  setLoading(btn, 'Authenticating…');
+
+  try {
+    const res  = await fetch(`${cloudUrl}/api/auth/login`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ mobile, password }),
     });
+    const data = await res.json();
+    if (!res.ok || !data.token) throw new Error(data.error || data.message || 'Login failed');
+
+    state.session = {
+      token:  data.token,
+      mobile,
+      name:   data.user?.name  || data.name  || mobile,
+      role:   data.user?.role  || data.role  || 'ADMIN',
+    };
+    state.cloudUrl = cloudUrl;
+
+    log('ok', `Authenticated as ${state.session.name} (${state.session.role})`);
+    hideAuthError();
+
+    if (askPasskey && !getPasskeyStored()) {
+      // Store pending credentials for modal
+      _pendingMobile = mobile;
+      _pendingPw     = password;
+      _pendingCloud  = cloudUrl;
+      showPasskeyModal();
+    } else {
+      openDashboard();
+    }
+  } catch (err) {
+    showAuthError(err.message);
+    log('err', 'Login failed: ' + err.message);
+  } finally {
+    if (btn) { btn.disabled = false; resetLoginBtn(btn); }
   }
 }
 
-// ============================================================================
-// DRAWER CONTROLS & DATE MODE SELECTOR
-// ============================================================================
-window.selectPullMode = function(mode) {
-  selectedPullMode = mode;
-  document.getElementById('optAllDates').classList.toggle('selected', mode === 'ALL');
-  document.getElementById('optToday').classList.toggle('selected', mode === 'TODAY');
-  document.getElementById('optCustomRange').classList.toggle('selected', mode === 'CUSTOM');
+function setLoading(btn, msg) {
+  if (!btn) return;
+  btn.innerHTML = `<svg class="spin" xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> ${msg}`;
+}
+function resetLoginBtn(btn) {
+  if (!btn) return;
+  btn.innerHTML = `<i data-lucide="log-in" style="width:14px;height:14px"></i> Sign In to Gateway`;
+  reIcons();
+}
 
-  const customRow = document.getElementById('customDateRangeRow');
-  if (customRow) {
-    customRow.style.display = mode === 'CUSTOM' ? 'flex' : 'none';
+function showAuthError(msg) {
+  const el = $('authError');
+  if (!el) return;
+  // Safely convert any thrown value to a readable string
+  const text = msg instanceof Error ? msg.message
+    : typeof msg === 'object' && msg !== null ? (msg.message || JSON.stringify(msg))
+    : String(msg || 'An unexpected error occurred');
+  el.textContent = text;
+  el.style.display = 'block';
+}
+function hideAuthError() {
+  const el = $('authError');
+  if (el) el.style.display = 'none';
+}
+
+// ─── Auth: Passkey Quick Login ────────────────────────────────────────────────
+$('btnPasskeyLogin')?.addEventListener('click', async () => {
+  const stored = getPasskeyStored();
+  if (!stored) return;
+
+  const btn = $('btnPasskeyLogin');
+  btn.disabled = true;
+  setLoading(btn, 'Unlocking with passkey…');
+
+  try {
+    const cred = await decryptCredential(stored);
+    // Re-authenticate with saved credentials
+    await doPasswordLogin(cred.mobile, cred.password, cred.cloudUrl || state.cloudUrl, false);
+    log('ok', `Quick Sign-In via device passkey for ${cred.mobile}`);
+  } catch (err) {
+    showAuthError('Passkey unlock failed. The credential may be corrupted — sign in with your password. ' + err.message);
+    log('err', 'Passkey error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `<i data-lucide="fingerprint" style="width:15px;height:15px"></i> Quick Sign In with Saved Passkey`;
+    reIcons();
   }
+});
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+function openDashboard() {
+  $('authView').style.display = 'none';
+  $('dashboardView').classList.add('visible');
+
+  const s = state.session;
+  $('sidebarName').textContent = s.name || s.mobile;
+  $('sidebarRole').textContent = s.role || 'ADMIN';
+  $('sidebarAva').textContent  = (s.name || s.mobile)[0].toUpperCase();
+  $('platformLabel').textContent =
+    process.platform === 'darwin' ? 'macOS' :
+    process.platform === 'win32'  ? 'Windows' : 'Linux';
+
+  refreshPasskeyUI();
+  updateCloudLabels();
+  setStatus('Gateway Connected');
+  log('ok', `Dashboard ready — ${s.name}`);
+  reIcons();
+}
+
+function updateCloudLabels() {
+  if ($('cloudLabel'))      $('cloudLabel').textContent      = state.cloudUrl;
+  if ($('deviceAddrLabel')) $('deviceAddrLabel').textContent = `${state.deviceIp}:${state.devicePort}`;
+}
+
+$('btnLogout')?.addEventListener('click', () => {
+  state.session = null;
+  state.allPunches = []; state.filteredPunches = [];
+  $('dashboardView').classList.remove('visible');
+  $('authView').style.display = 'flex';
+  resetStats();
+  log('info', 'Session ended.');
+});
+
+// ─── Sidebar Navigation ───────────────────────────────────────────────────────
+document.querySelectorAll('.nav-item[data-tab]').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    item.classList.add('active');
+    const pane = $(item.dataset.tab);
+    if (pane) { pane.classList.add('active'); reIcons(); }
+  });
+});
+
+// ─── Deck Tabs ────────────────────────────────────────────────────────────────
+document.querySelectorAll('.deck-tab[data-deck]').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.deck-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.deck-pane').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    const pane = $(tab.dataset.deck);
+    if (pane) pane.classList.add('active');
+  });
+});
+
+// ─── Pull Drawer ──────────────────────────────────────────────────────────────
+let pullDrawerOpen = false;
+
+$('btnOpenDrawer')?.addEventListener('click', () => {
+  pullDrawerOpen = !pullDrawerOpen;
+  if (pullDrawerOpen) {
+    $('pullDrawer').style.display = 'block';
+    $('pullBtnText').textContent  = 'Collapse Options';
+    reIcons();
+  } else {
+    closeDrawer();
+  }
+});
+
+window.closeDrawer = () => {
+  $('pullDrawer').style.display = 'none';
+  pullDrawerOpen = false;
+  $('pullBtnText').textContent = 'Pull From Hardware';
 };
 
-window.closePullDrawer = function() {
-  const drawer = document.getElementById('pullDrawer');
-  if (drawer) drawer.style.display = 'none';
+window.selectMode = (mode) => {
+  state.pullMode = mode;
+  document.querySelectorAll('.mode-pill').forEach(p => {
+    p.classList.toggle('active', p.dataset.mode === mode);
+  });
+  $('rangeRow').style.display = mode === 'RANGE' ? 'grid' : 'none';
 };
 
-// ============================================================================
-// STEP 1: PULL FROM HARDWARE (FETCH & PREVIEW ONLY - NO AUTO SYNC)
-// ============================================================================
-async function executePullFromHardware() {
-  closePullDrawer();
+document.querySelectorAll('.mode-pill').forEach(p => {
+  p.addEventListener('click', () => selectMode(p.dataset.mode || 'ALL'));
+});
 
-  const pullBtn = document.getElementById('btnTogglePullDrawer');
-  const pullIcon = document.getElementById('pullIcon');
-  const pullBtnText = document.getElementById('pullBtnText');
-  const pushBtn = document.getElementById('btnPushCloud');
-  const syncBtnText = document.getElementById('syncBtnText');
+// ─── Execute Pull from Hardware ────────────────────────────────────────────────
+$('btnExecutePull')?.addEventListener('click', async () => {
+  const btn = $('btnExecutePull');
+  if (btn.disabled) return;
 
-  pullBtn.style.pointerEvents = 'none';
-  pullIcon.classList.add('syncing-spinner');
-  pullBtnText.innerText = 'Connecting & Pulling...';
+  // Validate date range
+  if (state.pullMode === 'RANGE') {
+    const f = $('rangeFrom').value, t = $('rangeTo').value;
+    if (!f || !t) { log('warn', 'Select both From and To dates for Range mode.'); return; }
+    state.rangeFrom = f; state.rangeTo = t;
+  }
 
-  termLog('SOCKET', `Initiating Native TCP Socket Pull from ${config.ip}:${config.port} (Mode: ${selectedPullMode})...`);
+  closeDrawer();
+  btn.disabled = true;
+  setStatus('Connecting to hardware…', false);
+  log('sock', `TCP dial → ${state.deviceIp}:${state.devicePort} | mode: ${state.pullMode}`);
 
   const puller = new DevicePuller({
-    ip: config.ip,
-    port: config.port,
-    machineId: config.machineId,
-    cloudUrl: config.cloudUrl,
+    ip:        state.deviceIp,
+    port:      state.devicePort,
+    machineId: state.machineId,
+    cloudUrl:  state.cloudUrl,
+    authToken: state.session?.token || '',
   });
 
   try {
-    const pullRes = await puller.pullAttendanceLogs(10000);
+    // 1. Ping
+    const ping = await puller.pingDevice(3000);
+    const pingTxt = ping.reachable ? `${ping.latencyMs}ms` : 'Unreachable';
+    $('statPing').textContent    = pingTxt;
+    $('teleLatency').textContent = pingTxt;
+    if (!ping.reachable) throw new Error(`Device unreachable — ${ping.error}`);
+    log('ok', `Device responded in ${ping.latencyMs}ms`);
+    setStatus('Pulling from EEPROM…', false);
 
-    if (pullRes.success) {
-      let logs = pullRes.logs || [];
+    // 2. Pull attendance logs via TCP
+    const result = await puller.pullAttendanceLogs(15000);
 
-      // Filter logs based on chosen pull mode
-      if (selectedPullMode === 'TODAY') {
-        const todayStr = new Date().toISOString().substring(0, 10);
-        logs = logs.filter((p) => p.timestamp.startsWith(todayStr));
-      } else if (selectedPullMode === 'CUSTOM') {
-        const start = document.getElementById('drawerStartDate').value;
-        const end = document.getElementById('drawerEndDate').value;
-        if (start) logs = logs.filter((p) => p.timestamp.substring(0, 10) >= start);
-        if (end) logs = logs.filter((p) => p.timestamp.substring(0, 10) <= end);
-      }
-
-      cachedPunches = logs;
-      document.getElementById('cardPunchCount').innerText = `${cachedPunches.length} Punches`;
-      document.getElementById('badgePunches').innerText = String(cachedPunches.length);
-      document.getElementById('deckBadgePunches').innerText = String(cachedPunches.length);
-      
-      // Update Preview Table & Gap Analysis
-      renderPunchesTable(cachedPunches);
-      updateGapAnalysis(cachedPunches);
-
-      termLog('SUCCESS', `Native TCP Pull complete! Retrieved ${cachedPunches.length} punches from device EEPROM.`);
-      termLog('INFO', `Data is ready for inspection. Review tabs below and click "Push to Cloud Server" to commit.`);
-
-      // Enable Step 2 Push Button
-      pushBtn.disabled = false;
-      syncBtnText.innerText = `Push ${cachedPunches.length} Records to Cloud`;
-      document.getElementById('topStatusText').innerText = `Inspected ${cachedPunches.length} Records • Awaiting Sync`;
-    } else {
-      termLog('ERROR', `Pull failed: ${pullRes.error || 'Connection timed out'}`);
+    if (!result.success && !result.logs?.length) {
+      throw new Error(result.error || 'Pull failed — no data returned');
     }
+
+    let punches = result.logs || [];
+
+    log('ok', `Raw pull: ${punches.length} records from EEPROM (SN: ${result.serialNumber || '—'})`);
+
+    // 3. Apply date filter on client side
+    if (state.pullMode === 'TODAY') {
+      const today = new Date().toISOString().slice(0,10);
+      punches = punches.filter(p => p.timestamp?.slice(0,10) === today);
+      log('info', `Today filter applied → ${punches.length} records`);
+    } else if (state.pullMode === 'RANGE') {
+      const from = new Date(state.rangeFrom).getTime();
+      const to   = new Date(state.rangeTo).getTime() + 86399999;
+      punches = punches.filter(p => {
+        const t = new Date(p.timestamp?.replace(' ','T')+'Z').getTime();
+        return t >= from && t <= to;
+      });
+      log('info', `Range filter (${state.rangeFrom} → ${state.rangeTo}) → ${punches.length} records`);
+    } else {
+      // ALL — find missing dates to show in logs
+      const missInfo = getMissingDateInfo(punches);
+      if (missInfo.missing > 0) {
+        log('warn', `${missInfo.missing} calendar day(s) of gap data detected. Showing all available records.`);
+      }
+    }
+
+    state.allPunches  = punches;
+    state.allUsers    = [];  // Device puller doesn't support user enumeration in current version
+    state.allAudit    = [];
+
+    buildDateChips();
+    applyDateFilter(null);
+
+    // Update stats
+    const uniq = uniqueDates(punches);
+    $('statPunches').textContent = punches.length;
+    $('statDays').textContent    = uniq.length;
+    $('navBadgePunches').textContent = punches.length;
+    $('navBadgeUsers').textContent   = '—';
+    $('dkBadgeUsers').textContent    = '—';
+    $('dkBadgeAudit').textContent    = '—';
+
+    $('btnPushCloud').disabled = punches.length === 0;
+    setStatus(`Pulled ${punches.length} records — review and push`);
+    log('ok', `Pull complete — ${punches.length} filtered records across ${uniq.length} date(s).`);
+
   } catch (err) {
-    termLog('ERROR', `Socket pull error: ${err.message}`);
+    log('err', err.message);
+    setStatus('Pull failed', false);
   } finally {
-    pullBtn.style.pointerEvents = 'auto';
-    pullIcon.classList.remove('syncing-spinner');
-    pullBtnText.innerText = 'Pull From Hardware';
+    btn.disabled = false;
   }
+});
+
+function getMissingDateInfo(punches) {
+  if (!punches.length) return { missing: 0 };
+  const dates = uniqueDates(punches).map(d => new Date(d).getTime());
+  dates.sort((a,b) => a-b);
+  const min = dates[0], max = dates[dates.length-1];
+  const expected = Math.round((max - min) / 86400000) + 1;
+  return { missing: expected - dates.length };
 }
 
-// ============================================================================
-// STEP 2: SYNC & PUSH TO CLOUD SERVER
-// ============================================================================
-async function executePushToCloud() {
-  if (cachedPunches.length === 0) {
-    termLog('WARN', 'No records in memory to push. Please run Step 1 Pull first.');
+// ─── Date Chips ───────────────────────────────────────────────────────────────
+function uniqueDates(punches) {
+  return [...new Set(punches.map(p => p.timestamp?.slice(0,10)).filter(Boolean))].sort();
+}
+
+function buildDateChips() {
+  const row   = $('datePillsRow');
+  row.innerHTML = '';
+  const dates = uniqueDates(state.allPunches);
+  if (!dates.length) return;
+
+  const mkChip = (label, value) => {
+    const c = document.createElement('button');
+    c.className   = 'date-chip';
+    c.textContent = label;
+    c.dataset.date = value || '';
+    c.addEventListener('click', () => applyDateFilter(value || null, c));
+    return c;
+  };
+
+  const allChip = mkChip('All', null);
+  allChip.classList.add('active');
+  row.appendChild(allChip);
+  dates.forEach(d => row.appendChild(mkChip(d, d)));
+}
+
+function applyDateFilter(dateStr, chipEl) {
+  document.querySelectorAll('.date-chip').forEach(c => c.classList.remove('active'));
+  if (chipEl) chipEl.classList.add('active');
+  else {
+    const allChip = $('datePillsRow')?.querySelector('.date-chip');
+    if (allChip) allChip.classList.add('active');
+  }
+
+  state.filteredPunches = dateStr
+    ? state.allPunches.filter(p => p.timestamp?.slice(0,10) === dateStr)
+    : [...state.allPunches];
+
+  renderPunches(state.filteredPunches, 'tbPunches', 'pushPanel', 'shownCount', 'totalCount', 'btnPushNow');
+  renderPunchesFull(state.filteredPunches);
+  updatePushMeta();
+}
+
+// ─── Render Helpers ───────────────────────────────────────────────────────────
+function renderPunches(punches, tbodyId, panelId, shownId, totalId, pushBtnId) {
+  const tbody  = $(tbodyId);
+  const panel  = $(panelId);
+  const shown  = $(shownId);
+  const total  = $(totalId);
+  const pushBt = $(pushBtnId);
+
+  $('dkBadgePunches').textContent = punches.length;
+
+  if (!punches.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="tbl-empty">No records match this filter. Try a different date.</td></tr>';
+    if (panel) panel.style.display = 'none';
     return;
   }
 
-  const pushBtn = document.getElementById('btnPushCloud');
-  const syncIcon = document.getElementById('syncIcon');
-  const syncBtnText = document.getElementById('syncBtnText');
+  tbody.innerHTML = punches.map((p, i) => `
+    <tr>
+      <td class="mono text-dim">${i+1}</td>
+      <td class="mono text-cyan">${escHtml(p.userId)}</td>
+      <td>${escHtml(p.name || '—')}</td>
+      <td class="mono" style="font-size:11px">${escHtml(fmtDate(p.timestamp))}</td>
+      <td>${verifyBadge(p.verifyType || p.verifyMode)}</td>
+    </tr>
+  `).join('');
 
-  pushBtn.style.pointerEvents = 'none';
-  syncIcon.classList.add('syncing-spinner');
-  syncBtnText.innerText = 'Transmitting to Cloud...';
+  if (panel) panel.style.display = 'flex';
+  if (shown) shown.textContent   = punches.length;
+  if (total) total.textContent   = state.allPunches.length;
+  if (pushBt) pushBt.disabled    = false;
+  reIcons();
+}
 
-  termLog('SOCKET', `Pushing ${cachedPunches.length} records across ${Object.keys(groupedDates).length} dates to ${config.cloudUrl}/api/devices/sync/push...`);
+function renderPunchesFull(punches) {
+  const tbody = $('tbPunchesFull');
+  const panel = $('pushPanelFull');
+  const shown = $('shownCountFull');
+  const btn   = $('btnPushFull');
 
+  if (!punches.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="tbl-empty">No records. Pull data from Sync Hub first.</td></tr>';
+    if (panel) panel.style.display = 'none';
+    return;
+  }
+  tbody.innerHTML = punches.map((p, i) => `
+    <tr>
+      <td class="mono text-dim">${i+1}</td>
+      <td class="mono text-cyan">${escHtml(p.userId)}</td>
+      <td>${escHtml(p.name || '—')}</td>
+      <td class="mono" style="font-size:11px">${escHtml(fmtDate(p.timestamp))}</td>
+      <td>${verifyBadge(p.verifyType || p.verifyMode)}</td>
+    </tr>
+  `).join('');
+  if (panel) panel.style.display = 'flex';
+  if (shown) shown.textContent   = punches.length;
+  if (btn)   btn.disabled        = false;
+  reIcons();
+}
+
+function verifyBadge(mode) {
+  const m = String(mode || '').toLowerCase();
+  if (m.includes('face'))   return `<span class="badge badge-violet">Face</span>`;
+  if (m.includes('finger')) return `<span class="badge badge-blue">Fingerprint</span>`;
+  if (m.includes('pin') || m.includes('password')) return `<span class="badge badge-amber">PIN</span>`;
+  if (m.includes('rfid') || m.includes('card'))    return `<span class="badge badge-green">RFID</span>`;
+  return `<span class="badge badge-dim">${escHtml(mode||'—')}</span>`;
+}
+
+function updatePushMeta() {
+  const n = state.filteredPunches.length;
+  const pc = $('pushCountDesc');
+  if (pc) pc.textContent = `${n} record${n!==1?'s':''}`;
+  const bt = $('btnPushCloud');
+  if (bt) bt.disabled = n === 0;
+}
+
+function resetStats() {
+  ['statPunches','statDays','statPing','teleLatency'].forEach(id => {
+    const el = $(id); if (el) el.textContent = id === 'statPunches' || id === 'statDays' ? '0' : '—';
+  });
+  ['navBadgePunches','navBadgeUsers','dkBadgePunches','dkBadgeUsers','dkBadgeAudit'].forEach(id => {
+    const el = $(id); if (el) el.textContent = '0';
+  });
+  $('tbPunches').innerHTML = '<tr><td colspan="5" class="tbl-empty">Pull records from hardware to preview attendance logs here.</td></tr>';
+  const pp = $('pushPanel'); if (pp) pp.style.display = 'none';
+  const dr = $('datePillsRow'); if (dr) dr.innerHTML = '';
+  const pc = $('pushCountDesc'); if (pc) pc.textContent = '0 records';
+  const bt = $('btnPushCloud'); if (bt) bt.disabled = true;
+}
+
+// ─── Execute Push ─────────────────────────────────────────────────────────────
+async function executePush(records, btn) {
+  if (!records?.length) { log('warn', 'Nothing to push — check your date filter.'); return; }
+  if (!state.session?.token) { log('err', 'Not authenticated.'); return; }
+
+  btn.disabled = true;
+  const orig = btn.innerHTML;
+  btn.innerHTML = `<svg class="spin" xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg> Uploading ${records.length} records…`;
+
+  setStatus(`Pushing ${records.length} records…`, false);
+  log('sock', `Cloud upload: ${records.length} punch records → ${state.cloudUrl}`);
+
+  // Use DevicePuller's pushToCloud with our auth token baked into the instance
   const puller = new DevicePuller({
-    ip: config.ip,
-    port: config.port,
-    machineId: config.machineId,
-    cloudUrl: config.cloudUrl,
+    ip:        state.deviceIp,
+    port:      state.devicePort,
+    machineId: state.machineId,
+    cloudUrl:  state.cloudUrl,
+    authToken: state.session.token,
   });
 
   try {
-    const cloudRes = await puller.pushToCloud(cachedPunches, '102023050002456');
-
-    if (cloudRes.success) {
-      termLog('SUCCESS', `Cloud Sync Complete! Server: ${cloudRes.message || 'Processed successfully'}`);
-      document.getElementById('topStatusText').innerText = `Fully Synced (${cachedPunches.length} Punches) • Online`;
-      syncBtnText.innerText = 'Cloud Sync Confirmed';
-    } else {
-      termLog('ERROR', `Cloud push failed: ${cloudRes.error || 'Server error'}`);
-      syncBtnText.innerText = 'Retry Cloud Push';
-    }
+    const res = await puller.pushToCloud(records, '102023050002456');
+    if (res.success === false && res.error) throw new Error(res.error);
+    const ins = res.inserted ?? res.count ?? records.length;
+    const dup = res.duplicates ?? res.skipped ?? 0;
+    log('ok', `Push complete — ${ins} inserted, ${dup} duplicates skipped.`);
+    setStatus(`Pushed ${ins} records`, true);
   } catch (err) {
-    termLog('ERROR', `Cloud sync exception: ${err.message}`);
+    log('err', 'Push failed: ' + err.message);
+    setStatus('Push failed', false);
   } finally {
-    pushBtn.style.pointerEvents = 'auto';
-    syncIcon.classList.remove('syncing-spinner');
+    btn.disabled = false;
+    btn.innerHTML = orig;
+    reIcons();
   }
 }
 
-// Connect Scanned Device
-window.connectScannedDevice = function(ip) {
-  document.getElementById('cfgIp').value = ip;
-  config.ip = ip;
-  termLog('SUCCESS', `Switched active device IP to ${ip}.`);
-  document.getElementById('topStatusText').innerText = `Connected to ${ip}:5005`;
+$('btnPushCloud')?.addEventListener('click', () => executePush(state.filteredPunches, $('btnPushCloud')));
+$('btnPushNow')?.addEventListener('click',   () => executePush(state.filteredPunches, $('btnPushNow')));
+$('btnPushFull')?.addEventListener('click',  () => executePush(state.filteredPunches, $('btnPushFull')));
+
+// ─── Attendance Tab Date Filter ───────────────────────────────────────────────
+$('btnFilterPunches')?.addEventListener('click', () => {
+  const d = $('punchDateFilter').value;
+  if (!d) return;
+  state.filteredPunches = state.allPunches.filter(p => p.timestamp?.slice(0,10) === d);
+  renderPunchesFull(state.filteredPunches);
+  updatePushMeta();
+});
+$('btnClearFilter')?.addEventListener('click', () => {
+  $('punchDateFilter').value = '';
+  state.filteredPunches = [...state.allPunches];
+  renderPunchesFull(state.filteredPunches);
+  updatePushMeta();
+});
+
+// ─── Settings ─────────────────────────────────────────────────────────────────
+$('btnSaveSettings')?.addEventListener('click', () => {
+  const ip  = $('cfgIp').value.trim();
+  const prt = parseInt($('cfgPort').value);
+  const mid = parseInt($('cfgMachineId').value);
+  const url = $('cfgCloudUrl').value.trim();
+  if (ip)  state.deviceIp   = ip;
+  if (prt) state.devicePort = prt;
+  if (mid) state.machineId  = mid;
+  if (url) state.cloudUrl   = url;
+  updateCloudLabels();
+  log('ok', `Settings saved — ${state.deviceIp}:${state.devicePort} | ${state.cloudUrl}`);
+  setStatus('Settings saved');
+});
+
+// ─── Network Scanner ──────────────────────────────────────────────────────────
+$('btnStartScan')?.addEventListener('click', async () => {
+  const btn = $('btnStartScan');
+  btn.disabled = true;
+  setLoading(btn, 'Scanning subnet…');
+
+  $('scanResultsCard').style.display = 'block';
+  const tbody = $('tbScanner');
+  tbody.innerHTML = '<tr><td colspan="5" class="tbl-empty">Scanning 192.168.x.x:5005 — please wait…</td></tr>';
+  log('sock', 'LAN sweep started — port 5005 on 192.168.29.x (timeout 400ms/host)');
+
+  const net  = require('net');
+  const found = [];
+  const tasks = [];
+  const base  = '192.168.29';
+
+  for (let i = 1; i <= 254; i++) {
+    const ip = `${base}.${i}`;
+    tasks.push(new Promise(resolve => {
+      const t0   = Date.now();
+      const sock = new net.Socket();
+      sock.setTimeout(400);
+      sock.on('connect', () => { sock.destroy(); found.push({ ip, latency: Date.now()-t0 }); resolve(); });
+      sock.on('timeout', () => { sock.destroy(); resolve(); });
+      sock.on('error',   () => { sock.destroy(); resolve(); });
+      sock.connect(5005, ip);
+    }));
+  }
+
+  await Promise.all(tasks);
+  btn.disabled = false;
+  btn.innerHTML = `<i data-lucide="search" style="width:14px;height:14px"></i> Start Network Sweep`;
+  reIcons();
+
+  if (!found.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="tbl-empty">No devices found on 192.168.29.x:5005. Try adjusting your subnet in Settings.</td></tr>';
+    log('warn', 'LAN sweep complete — no devices found.');
+    return;
+  }
+
+  log('ok', `Sweep done — ${found.length} device(s) found`);
+  tbody.innerHTML = found.map(d => `
+    <tr>
+      <td class="mono text-cyan">${d.ip}</td>
+      <td class="mono">5005</td>
+      <td><span class="badge badge-blue">TCP/Binary</span></td>
+      <td class="mono text-violet">${d.latency}ms</td>
+      <td>
+        <button
+          onclick="useDevice('${d.ip}')"
+          style="padding:4px 12px;background:rgba(34,211,238,0.1);border:1px solid rgba(34,211,238,0.3);
+                 border-radius:6px;color:var(--cyan);font-size:11px;font-weight:700;cursor:pointer;transition:all 0.2s"
+        >Use This</button>
+      </td>
+    </tr>
+  `).join('');
+});
+
+window.useDevice = (ip) => {
+  state.deviceIp = ip;
+  $('cfgIp').value = ip;
+  updateCloudLabels();
+  log('ok', `Active device switched to ${ip}:${state.devicePort}`);
+  document.querySelector('.nav-item[data-tab="tab-sync"]')?.click();
 };
 
-// DOM Initialization
-document.addEventListener('DOMContentLoaded', () => {
-  refreshIcons();
-  renderAuditTable();
+// ─── App Init ─────────────────────────────────────────────────────────────────
+function initApp() {
+  // Purge stale passkey keys from previous app versions
+  localStorage.removeItem('ksynbr_passkey_cred');  // v1 key
+  localStorage.removeItem('ksynbr_pk_v1');          // any other old keys
 
-  // Detect Platform
-  const isMac = process.platform === 'darwin' || navigator.userAgent.includes('Mac');
-  document.getElementById('platformLabel').innerText = isMac ? 'macOS Universal (Apple Silicon & Intel)' : 'Windows Native';
+  // Always start with a clean auth error state
+  const errEl = $('authError');
+  if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
 
-  // Check for Saved Local Passkey
-  const savedPasskey = localStorage.getItem('kernn_desktop_passkey');
-  if (savedPasskey) {
-    try {
-      const parsed = JSON.parse(savedPasskey);
-      if (parsed.user && parsed.token) {
-        document.getElementById('passkeySection').style.display = 'block';
-        document.getElementById('btnPasskeyLogin').addEventListener('click', () => {
-          loginWithSession(parsed.user, parsed.serverUrl || config.cloudUrl);
-        });
-      }
-    } catch {}
-  }
+  refreshPasskeyUI();
 
-  // Cloud URL Dropdown change
-  const serverSelect = document.getElementById('loginServerSelect');
-  const serverCustom = document.getElementById('loginServerCustomUrl');
+  // Default dates for range picker
+  const today = new Date().toISOString().slice(0,10);
+  const week  = new Date(Date.now() - 7*86400000).toISOString().slice(0,10);
+  const rf = $('rangeFrom'); if (rf) rf.value = week;
+  const rt = $('rangeTo');   if (rt) rt.value = today;
 
-  serverSelect.addEventListener('change', () => {
-    if (serverSelect.value === 'custom') {
-      serverCustom.style.display = 'block';
-      serverCustom.focus();
-    } else {
-      serverCustom.style.display = 'none';
-      config.cloudUrl = serverSelect.value;
-      document.getElementById('cfgCloudUrl').value = serverSelect.value;
-      document.getElementById('cloudTargetLabel').innerText = serverSelect.value;
-    }
-  });
-
-  // Password Show / Hide Toggle
-  const togglePassBtn = document.getElementById('btnTogglePassword');
-  const passInput = document.getElementById('loginPassword');
-  const eyeIcon = document.getElementById('eyeIcon');
-
-  togglePassBtn.addEventListener('click', () => {
-    if (passInput.type === 'password') {
-      passInput.type = 'text';
-      eyeIcon.setAttribute('data-lucide', 'eye-off');
-    } else {
-      passInput.type = 'password';
-      eyeIcon.setAttribute('data-lucide', 'eye');
-    }
-    refreshIcons();
-  });
-
-  function loginWithSession(user, serverUrl) {
-    config.sessionUser = user;
-    config.cloudUrl = serverUrl;
-    document.getElementById('sidebarUserName').innerText = user.name;
-    document.getElementById('sidebarUserRole').innerText = user.role.replace('_', ' ');
-    document.getElementById('sidebarAvatar').innerText = user.name[0] || 'A';
-    document.getElementById('cloudTargetLabel').innerText = serverUrl;
-    document.getElementById('cfgCloudUrl').value = serverUrl;
-
-    document.getElementById('authView').style.display = 'none';
-    document.getElementById('dashboardView').style.display = 'flex';
-    refreshIcons();
-
-    termLog('SUCCESS', `Authenticated via Passkey as ${user.name} (${user.role}).`);
-    termLog('INFO', `Hardware ready at ${config.ip}:${config.port}. Click "Pull From Hardware" to start.`);
-  }
-
-  // ==========================================================================
-  // AUTHENTICATION FORM HANDLER
-  // ==========================================================================
-  const loginForm = document.getElementById('loginForm');
-  const authErrorBanner = document.getElementById('authErrorBanner');
-
-  loginForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    authErrorBanner.style.display = 'none';
-
-    let serverUrl = serverSelect.value === 'custom'
-      ? serverCustom.value.trim().replace(/\/$/, '')
-      : serverSelect.value;
-
-    if (!serverUrl) serverUrl = 'https://kernn-hrms-internal.vercel.app';
-
-    const mobile = document.getElementById('loginMobile').value.trim();
-    const pass = passInput.value;
-    const btnLogin = document.getElementById('btnLogin');
-    const rememberPasskey = document.getElementById('chkSavePasskey').checked;
-
-    btnLogin.disabled = true;
-    btnLogin.innerText = 'Authenticating...';
-
-    config.cloudUrl = serverUrl;
-    document.getElementById('cfgCloudUrl').value = serverUrl;
-    document.getElementById('cloudTargetLabel').innerText = serverUrl;
-
-    try {
-      const res = await fetch(`${serverUrl}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mobileNumber: mobile, password: pass }),
-      });
-
-      const data = await res.json();
-
-      if (data.success && data.data?.user) {
-        const user = data.data.user;
-
-        // Check if user is Admin or Manager
-        if (user.role !== 'SUPER_ADMIN' && user.role !== 'MANAGER' && user.role !== 'HR_ADMIN') {
-          authErrorBanner.innerText = 'Access Denied: Only Administrators and Managers can access this bridge.';
-          authErrorBanner.style.display = 'block';
-          btnLogin.disabled = false;
-          btnLogin.innerText = 'Sign In to Gateway';
-          return;
-        }
-
-        // Save Passkey if checked
-        if (rememberPasskey) {
-          localStorage.setItem('kernn_desktop_passkey', JSON.stringify({
-            user,
-            serverUrl,
-            savedAt: new Date().toISOString(),
-          }));
-        }
-
-        loginWithSession(user, serverUrl);
-      } else {
-        authErrorBanner.innerText = data.error?.message || 'Invalid credentials.';
-        authErrorBanner.style.display = 'block';
-      }
-    } catch (err) {
-      authErrorBanner.innerText = `Could not reach cloud server: ${err.message}`;
-      authErrorBanner.style.display = 'block';
-    } finally {
-      btnLogin.disabled = false;
-      btnLogin.innerHTML = '<i data-lucide="lock" style="width: 14px; height: 14px; margin-right: 6px;"></i> Sign In to Gateway';
-      refreshIcons();
-    }
-  });
-
-  // Logout Handler
-  document.getElementById('btnLogout').addEventListener('click', () => {
-    config.sessionUser = null;
-    document.getElementById('dashboardView').style.display = 'none';
-    document.getElementById('authView').style.display = 'flex';
-    passInput.value = '';
-    refreshIcons();
-  });
-
-  // Toggle Pull Drawer
-  document.getElementById('btnTogglePullDrawer').addEventListener('click', () => {
-    const drawer = document.getElementById('pullDrawer');
-    drawer.style.display = drawer.style.display === 'none' ? 'block' : 'none';
-    refreshIcons();
-  });
-
-  // Execute Pull inside drawer
-  document.getElementById('btnExecutePull').addEventListener('click', executePullFromHardware);
-
-  // Deck Tabs Switching (Attendance Logs, Enrolled Staff, Management Audit, Telemetry)
-  document.querySelectorAll('.deck-tab').forEach((tab) => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.deck-tab').forEach((t) => t.classList.remove('active'));
-      document.querySelectorAll('.deck-content-pane').forEach((p) => p.classList.remove('active'));
-
-      tab.classList.add('active');
-      const targetPane = document.getElementById(tab.getAttribute('data-deck'));
-      if (targetPane) targetPane.classList.add('active');
-      refreshIcons();
-    });
-  });
-
-  // Navigation Tab Switching
-  document.querySelectorAll('.nav-item').forEach((item) => {
-    item.addEventListener('click', () => {
-      document.querySelectorAll('.nav-item').forEach((i) => i.classList.remove('active'));
-      document.querySelectorAll('.tab-pane').forEach((p) => p.classList.remove('active'));
-
-      item.classList.add('active');
-      const tabId = item.getAttribute('data-tab');
-      const targetPane = document.getElementById(tabId);
-      if (targetPane) targetPane.classList.add('active');
-      refreshIcons();
-    });
-  });
-
-  // Step 2: Push to Cloud Button Click
-  document.getElementById('btnPushCloud').addEventListener('click', executePushToCloud);
-
-  // Clear Terminal Button
-  document.getElementById('btnClearTerm').addEventListener('click', () => {
-    document.getElementById('termBody').innerHTML = '';
-    termLog('INFO', 'Terminal cleared.');
-  });
-
-  // Filter Punches by Date
-  document.getElementById('btnFilterPunches').addEventListener('click', () => {
-    const d = document.getElementById('punchDateFilter').value;
-    if (!d) {
-      renderPunchesTable(cachedPunches);
-    } else {
-      const filtered = cachedPunches.filter((p) => p.timestamp.startsWith(d));
-      renderPunchesTable(filtered);
-      termLog('INFO', `Filtered attendance punches for date: [${d}] (${filtered.length} found).`);
-    }
-  });
-
-  // Network Scanner
-  document.getElementById('btnStartScan').addEventListener('click', () => {
-    const scanCard = document.getElementById('scanResultsCard');
-    scanCard.style.display = 'block';
-    termLog('SOCKET', 'Scanning local Wi-Fi subnet (192.168.29.1 - 192.168.29.254)...');
-    setTimeout(() => {
-      termLog('SUCCESS', 'Scan complete: Found 1 confirmed Secureye S-FB3K terminal at 192.168.29.83:5005 (Latency: 4ms).');
-    }, 1500);
-  });
-
-  // Save Settings
-  document.getElementById('btnSaveSettings').addEventListener('click', () => {
-    config.ip = document.getElementById('cfgIp').value.trim();
-    config.port = parseInt(document.getElementById('cfgPort').value.trim(), 10);
-    config.cloudUrl = document.getElementById('cfgCloudUrl').value.trim();
-
-    termLog('SUCCESS', `Settings updated: ${config.ip}:${config.port} -> ${config.cloudUrl}`);
-    document.getElementById('topStatusText').innerText = `Configured (${config.ip}:${config.port})`;
-    document.getElementById('cloudTargetLabel').innerText = config.cloudUrl;
-  });
-});
+  log('info', `Kernn Sync Bridge ready — ${process.platform} / Electron ${process.versions.electron}`);
+}
