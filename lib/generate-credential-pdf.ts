@@ -4,6 +4,7 @@
  */
 
 import { jsPDF } from 'jspdf';
+import { KERNN_LANDSCAPE_LOGO_BASE64 } from './logo-base64';
 
 export interface CredentialPdfData {
   type: 'NEW_EMPLOYEE' | 'PASSWORD_RESET';
@@ -50,16 +51,20 @@ export function generateCredentialPdf(data: CredentialPdfData) {
   }
   doc.rect(0, 40, 210, 2, 'F');
 
-  // Brand Logo
-  doc.setTextColor(225, 29, 72); // Crimson
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(22);
-  doc.text('KERNN', margin, 18);
-
-  doc.setTextColor(148, 163, 184); // Slate 400
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text('AUTOMATIONS & WORKFORCE MANAGEMENT', margin, 24);
+  // Brand Logo (Official Landscape Image)
+  try {
+    doc.addImage(KERNN_LANDSCAPE_LOGO_BASE64, 'PNG', margin, 7, 50, 21.7);
+  } catch (_) {
+    // Fallback if image rendering fails
+    doc.setTextColor(225, 29, 72);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(22);
+    doc.text('KERNN', margin, 18);
+    doc.setTextColor(148, 163, 184);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('AUTOMATIONS & WORKFORCE MANAGEMENT', margin, 24);
+  }
 
   // Document Badge on Right
   doc.setFont('helvetica', 'bold');
