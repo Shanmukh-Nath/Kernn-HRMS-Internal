@@ -53,6 +53,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: { code: 'UNAUTHORIZED' } }, { status: 401 });
     }
 
+    const body = await req.json().catch(() => ({}));
+    const { month, year } = body;
+
     // Super Admin & HR Admins are pre-authorized with zero approval requirement
     if (session.role === 'SUPER_ADMIN' || session.role === 'HR_ADMIN' || session.role === 'ADMIN') {
       return NextResponse.json({
@@ -60,6 +63,10 @@ export async function POST(req: NextRequest) {
         message: 'Super Admin direct download authorized.',
         data: { status: 'APPROVED' },
       });
+    }
+
+    if (!month || !year) {
+      return NextResponse.json({ success: false, error: { code: 'INVALID_INPUT', message: 'Month and year are required' } }, { status: 400 });
     }
 
     const db = await getMongoDb();
