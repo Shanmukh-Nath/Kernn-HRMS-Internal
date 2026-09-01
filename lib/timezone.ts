@@ -69,6 +69,23 @@ export function formatAppTime(date: Date | string | number | null | undefined): 
   }
 }
 
+export function formatAppTime12(date: Date | string | number | null | undefined): string {
+  if (!date) return '-';
+  const d = parseAppDate(date);
+  if (isNaN(d.getTime())) return '-';
+
+  try {
+    return new Intl.DateTimeFormat('en-IN', {
+      timeZone: DEFAULT_TIMEZONE,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    }).format(d);
+  } catch {
+    return d.toLocaleTimeString();
+  }
+}
+
 export function formatAppDate(date: Date | string | number | null | undefined): string {
   if (!date) return '-';
   const d = parseAppDate(date);
@@ -85,4 +102,5 @@ export function formatAppDate(date: Date | string | number | null | undefined): 
     return d.toLocaleDateString();
   }
 }
+
 

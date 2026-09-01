@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { calculateDailyAttendance, ShiftRuleConfig } from '@/lib/attendance-calculator';
 import { getStoredShiftRule } from '@/lib/rules-store';
-import { format } from 'date-fns';
+import { parseAppDate } from '@/lib/timezone';
 import {
   attendanceEventsCol,
   employeesCol,
@@ -13,15 +13,6 @@ import {
 } from '@/lib/mongodb';
 
 export const dynamic = 'force-dynamic';
-
-function safeParseDate(val: any): Date {
-  if (val instanceof Date) return val;
-  if (typeof val === 'number') return new Date(val);
-  const n = Number(val);
-  if (!isNaN(n) && n > 1000000000) return new Date(n);
-  const d = new Date(val);
-  return isNaN(d.getTime()) ? new Date() : d;
-}
 
 export async function GET(req: NextRequest) {
   try {
@@ -41,20 +32,13 @@ export async function GET(req: NextRequest) {
       const attCol = await attendanceEventsCol();
       const empCol = await employeesCol();
 
-      const filter: Record<string, any> = {};
-      if (startDate && endDate) {
-        filter.timestamp = {
-          $gte: new Date(`${startDate}T00:00:00.000Z`),
-          $lte: new Date(`${endDate}T23:59:59.999Z`),
-        };
-      } else if (startDate) {
-        filter.timestamp = { $gte: new Date(`${startDate}T00:00:00.000Z`) };
-      }
+      const minDate = startDate ? new Date(`${startDate}T00:00:00+05:30`) : null;
+      const maxDate = endDate ? new Date(`${endDate}T23:59:59.999+05:30`) : null;
 
-      const rawEvents = await attCol.find(filter).sort({ timestamp: 1 }).toArray();
+      const rawEvents = await attCol.find({}).sort({ timestamp: 1 }).toArray();
       const employees = await empCol.find({}).toArray();
-      const empById = new Map(employees.map((e) => [e.id, e]));
-      const empByDeviceUserId = new Map(employees.map((e) => [e.deviceUserId, e]));
+      const empById = new Map(employees.map((e) => [String(e.id || e._id), e]));
+      const empByDeviceUserId = new Map(employees.map((e) => [String(e.deviceUserId), e]));
 
       const groupedMap = new Map<
         string,
@@ -67,30 +51,42 @@ export async function GET(req: NextRequest) {
       >();
 
       for (const ev of rawEvents) {
-        const parsedDate = safeParseDate(ev.timestamp);
-        const dStr = format(parsedDate, 'yyyy-MM-dd');
-        const key = `${dStr}_${ev.deviceUserId}`;
-        const emp = (ev.employeeId && empById.get(ev.employeeId)) || empByDeviceUserId.get(ev.deviceUserId);
+        const parsedDate = parseAppDate(ev.timestamp);
+
+        if (minDate && parsedDate < minDate) continue;
+        if (maxDate && parsedDate > maxDate) continue;
+
+        // Group by IST Date (YYYY-MM-DD)
+        const dStr = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Kolkata',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(parsedDate);
+
+        const emp = (ev.employeeId && empById.get(String(ev.employeeId))) || (ev.deviceUserId && empByDeviceUserId.get(String(ev.deviceUserId)));
+        const resolvedUserId = String(emp?.deviceUserId || ev.deviceUserId || '0');
+        const key = `${dStr}_${resolvedUserId}`;
 
         if (!groupedMap.has(key)) {
           groupedMap.set(key, {
             dateStr: dStr,
-            deviceUserId: ev.deviceUserId,
+            deviceUserId: resolvedUserId,
             employeeInfo: {
-              name: emp?.name || `User #${ev.deviceUserId}`,
-              code: emp?.employeeCode || `EMP-${ev.deviceUserId}`,
-              id: ev.employeeId || emp?.id,
-              department: emp?.department || 'General',
+              name: emp?.name || `User #${resolvedUserId}`,
+              code: emp?.employeeCode || `EMP-${resolvedUserId}`,
+              id: String(emp?.id || emp?._id || ev.employeeId || ''),
+              department: emp?.department || 'Operations',
             },
             punches: [],
           });
         }
 
         groupedMap.get(key)!.punches.push({
-          id: ev.id,
+          id: ev.id || String(ev._id),
           timestamp: parsedDate,
-          verificationType: ev.verificationType,
-          terminalName: ev.terminalName,
+          verificationType: ev.verificationType || 'Fingerprint',
+          terminalName: ev.terminalName || 'Secureye Terminal',
           status: ev.status,
         });
       }

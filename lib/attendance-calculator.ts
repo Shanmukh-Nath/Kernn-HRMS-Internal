@@ -1,4 +1,5 @@
-import { parseISO, format, differenceInMinutes, isValid, addMinutes } from 'date-fns';
+import { differenceInMinutes, isValid, addMinutes } from 'date-fns';
+import { parseAppDate, formatAppTime12, formatAppDate } from '@/lib/timezone';
 
 export interface ShiftRuleConfig {
   id?: string;
@@ -40,8 +41,8 @@ export interface RawPunch {
 }
 
 export interface BreakInterval {
-  goOutTime: string; // "13:15:00"
-  returnTime: string; // "14:00:00"
+  goOutTime: string; // "01:15 PM"
+  returnTime: string; // "02:00 PM"
   durationMinutes: number;
   outVerification?: string;
   returnVerification?: string;
@@ -49,7 +50,7 @@ export interface BreakInterval {
 
 export interface DailyAttendanceRecord {
   date: string; // "YYYY-MM-DD"
-  formattedDate: string; // "28 Aug 2026"
+  formattedDate: string; // "01 Sep 2026"
   employeeId?: string;
   deviceUserId: string;
   employeeName: string;
@@ -88,13 +89,13 @@ export interface DailyAttendanceRecord {
 }
 
 /**
- * Parses "HH:mm" time string into a Date object on a given reference date
+ * Parses "HH:mm" time string into a Date object on a given reference date in IST
  */
 function createDateWithTime(dateStr: string, timeStr: string): Date {
-  const [hours, minutes] = timeStr.split(':').map(Number);
-  const d = new Date(`${dateStr}T00:00:00`);
-  d.setHours(hours, minutes, 0, 0);
-  return d;
+  const [hours, minutes] = (timeStr || '09:00').split(':').map(Number);
+  const normalizedDate = dateStr.slice(0, 10);
+  const isoStr = `${normalizedDate}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00+05:30`;
+  return new Date(isoStr);
 }
 
 /**
@@ -107,36 +108,20 @@ export function calculateDailyAttendance(
   employeeInfo: { name: string; code?: string; id?: string }
 ): DailyAttendanceRecord {
   const sortedPunches = [...rawPunches].sort(
-    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    (a, b) => parseAppDate(a.timestamp).getTime() - parseAppDate(b.timestamp).getTime()
   );
 
-  // 1. Debounce repetitive punches within rule.debounceMinutes (e.g. 3 mins)
-  const cleanPunches: RawPunch[] = [];
-  for (const p of sortedPunches) {
-    const pTime = new Date(p.timestamp).getTime();
-    if (cleanPunches.length === 0) {
-      cleanPunches.push(p);
-    } else {
-      const lastTime = new Date(cleanPunches[cleanPunches.length - 1].timestamp).getTime();
-      const diffMinutes = (pTime - lastTime) / (1000 * 60);
-      if (diffMinutes >= (rule.debounceMinutes || 3)) {
-        cleanPunches.push(p);
-      }
-    }
-  }
-
+  const formattedDate = formatAppDate(dateStr);
   const shiftStart = createDateWithTime(dateStr, rule.shiftStartTime);
   const shiftEnd = createDateWithTime(dateStr, rule.shiftEndTime);
-  const graceEnd = addMinutes(shiftStart, rule.gracePeriodMinutes);
-  const lateEnd = addMinutes(shiftStart, rule.lateMarkThresholdMinutes);
-  const earlyExitCutoff = addMinutes(shiftEnd, -rule.earlyExitThresholdMinutes);
-  const overtimeCutoff = addMinutes(shiftEnd, rule.overtimeMinMinutes);
-
-  const formattedDate = format(new Date(`${dateStr}T12:00:00`), 'dd MMM yyyy');
-  const scheduledShift = `${format(shiftStart, 'hh:mm a')} - ${format(shiftEnd, 'hh:mm a')}`;
+  const graceEnd = addMinutes(shiftStart, rule.gracePeriodMinutes || 15);
+  const lateEnd = addMinutes(shiftStart, rule.lateMarkThresholdMinutes || 45);
+  const earlyExitCutoff = addMinutes(shiftEnd, -(rule.earlyExitThresholdMinutes || 30));
+  const overtimeCutoff = addMinutes(shiftEnd, rule.overtimeMinMinutes || 30);
+  const scheduledShift = `${formatAppTime12(shiftStart)} - ${formatAppTime12(shiftEnd)}`;
 
   // If no punches recorded
-  if (cleanPunches.length === 0) {
+  if (sortedPunches.length === 0) {
     return {
       date: dateStr,
       formattedDate,
@@ -170,9 +155,9 @@ export function calculateDailyAttendance(
   }
 
   // First punch = Check In
-  const firstPunch = cleanPunches[0];
-  const firstPunchDate = new Date(firstPunch.timestamp);
-  const checkInTime = format(firstPunchDate, 'hh:mm a');
+  const firstPunch = sortedPunches[0];
+  const firstPunchDate = parseAppDate(firstPunch.timestamp);
+  const checkInTime = formatAppTime12(firstPunchDate);
   const checkInIso = firstPunchDate.toISOString();
   const checkInVerification = firstPunch.verificationType;
 
@@ -190,7 +175,7 @@ export function calculateDailyAttendance(
   }
 
   // Handle single punch of the day
-  if (cleanPunches.length === 1) {
+  if (sortedPunches.length === 1) {
     return {
       date: dateStr,
       formattedDate,
@@ -218,15 +203,15 @@ export function calculateDailyAttendance(
       netWorkHours: 0,
       status: 'SINGLE_PUNCH',
       statusColor: 'bg-amber-50 text-amber-700 border-amber-200',
-      rawPunchesCount: rawPunches.length,
-      cleanPunchesCount: cleanPunches.length,
+      rawPunchesCount: 1,
+      cleanPunchesCount: 1,
     };
   }
 
-  // Last punch = Check Out
-  const lastPunch = cleanPunches[cleanPunches.length - 1];
-  const lastPunchDate = new Date(lastPunch.timestamp);
-  const checkOutTime = format(lastPunchDate, 'hh:mm a');
+  // Last punch = Check Out (when 2 or more punches exist)
+  const lastPunch = sortedPunches[sortedPunches.length - 1];
+  const lastPunchDate = parseAppDate(lastPunch.timestamp);
+  const checkOutTime = formatAppTime12(lastPunchDate);
   const checkOutIso = lastPunchDate.toISOString();
   const checkOutVerification = lastPunch.verificationType;
 
@@ -245,31 +230,22 @@ export function calculateDailyAttendance(
 
   // Intermediary Breaks (Go Out & Return Pairing)
   const breaks: BreakInterval[] = [];
-  const midPunches = cleanPunches.slice(1, cleanPunches.length - 1);
+  const midPunches = sortedPunches.slice(1, sortedPunches.length - 1);
 
   for (let i = 0; i < midPunches.length; i += 2) {
     const outP = midPunches[i];
     const retP = midPunches[i + 1];
 
     if (outP && retP) {
-      const outDate = new Date(outP.timestamp);
-      const retDate = new Date(retP.timestamp);
+      const outDate = parseAppDate(outP.timestamp);
+      const retDate = parseAppDate(retP.timestamp);
       const dur = Math.max(0, Math.round((retDate.getTime() - outDate.getTime()) / (1000 * 60)));
       breaks.push({
-        goOutTime: format(outDate, 'hh:mm a'),
-        returnTime: format(retDate, 'hh:mm a'),
+        goOutTime: formatAppTime12(outDate),
+        returnTime: formatAppTime12(retDate),
         durationMinutes: dur,
         outVerification: outP.verificationType,
         returnVerification: retP.verificationType,
-      });
-    } else if (outP && !retP) {
-      // Single intermediary punch, treat as 15 min quick break
-      const outDate = new Date(outP.timestamp);
-      breaks.push({
-        goOutTime: format(outDate, 'hh:mm a'),
-        returnTime: format(addMinutes(outDate, 15), 'hh:mm a'),
-        durationMinutes: 15,
-        outVerification: outP.verificationType,
       });
     }
   }
@@ -277,30 +253,24 @@ export function calculateDailyAttendance(
   const totalBreakMinutes = breaks.reduce((acc, b) => acc + b.durationMinutes, 0);
   const grossDurationMinutes = Math.max(0, Math.round((lastPunchDate.getTime() - firstPunchDate.getTime()) / (1000 * 60)));
   const netWorkDurationMinutes = Math.max(0, grossDurationMinutes - totalBreakMinutes);
-  const netWorkHours = Math.round((netWorkDurationMinutes / 60) * 10) / 10;
+  const netWorkHours = Number((netWorkDurationMinutes / 60).toFixed(2));
 
-  // Synthesize Daily Attendance Status
+  // Determine Daily Status
   let status: 'PRESENT' | 'LATE' | 'EARLY_EXIT' | 'HALF_DAY' | 'OVERTIME' | 'SINGLE_PUNCH' | 'ABSENT' = 'PRESENT';
   let statusColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
 
   if (netWorkHours < (rule.halfDayMinHours || 4.0)) {
-    status = 'ABSENT';
-    statusColor = 'bg-rose-50 text-rose-700 border-rose-200';
-  } else if (netWorkHours < (rule.fullDayMinHours || 7.5) || checkInStatus === 'VERY_LATE') {
     status = 'HALF_DAY';
     statusColor = 'bg-orange-50 text-orange-700 border-orange-200';
-  } else if (checkOutStatus === 'OVERTIME') {
-    status = 'OVERTIME';
-    statusColor = 'bg-purple-50 text-purple-700 border-purple-200';
-  } else if (checkInStatus === 'LATE') {
+  } else if (minutesEarlyExit > 0) {
+    status = 'EARLY_EXIT';
+    statusColor = 'bg-amber-50 text-amber-700 border-amber-200';
+  } else if (minutesLate > 0) {
     status = 'LATE';
     statusColor = 'bg-amber-50 text-amber-700 border-amber-200';
-  } else if (checkOutStatus === 'EARLY_EXIT') {
-    status = 'EARLY_EXIT';
-    statusColor = 'bg-yellow-50 text-yellow-700 border-yellow-200';
-  } else {
-    status = 'PRESENT';
-    statusColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  } else if (minutesOvertime >= (rule.overtimeMinMinutes || 30)) {
+    status = 'OVERTIME';
+    statusColor = 'bg-blue-50 text-blue-700 border-blue-200';
   }
 
   return {
@@ -331,6 +301,7 @@ export function calculateDailyAttendance(
     status,
     statusColor,
     rawPunchesCount: rawPunches.length,
-    cleanPunchesCount: cleanPunches.length,
+    cleanPunchesCount: sortedPunches.length,
   };
 }
+

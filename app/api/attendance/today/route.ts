@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
-import { format } from 'date-fns';
+import { parseAppDate } from '@/lib/timezone';
 import {
   employeesCol,
   attendanceEventsCol,
@@ -19,9 +19,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: { code: 'UNAUTHORIZED' } }, { status: 401 });
     }
 
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const startOfToday = new Date(`${todayStr}T00:00:00.000Z`);
-    const endOfToday = new Date(`${todayStr}T23:59:59.999Z`);
+    // Current IST date (YYYY-MM-DD)
+    const nowIst = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const todayStr = nowIst;
+    const startOfToday = new Date(`${todayStr}T00:00:00+05:30`);
+    const endOfToday = new Date(`${todayStr}T23:59:59.999+05:30`);
 
     const empCol = await employeesCol();
     const attCol = await attendanceEventsCol();
@@ -36,28 +38,42 @@ export async function GET(req: NextRequest) {
       .sort({ name: 1 })
       .toArray();
 
-    // 2. Fetch today's attendance events
-    const todayEvents = await attCol
-      .find({ timestamp: { $gte: startOfToday, $lte: endOfToday } })
-      .sort({ timestamp: 1 })
-      .toArray();
+    const empById = new Map(employees.map((e) => [String(e.id || e._id), e]));
+    const empByDeviceUserId = new Map(employees.map((e) => [String(e.deviceUserId), e]));
+
+    // 2. Fetch today's attendance events across Date and string timestamps
+    const rawEvents = await attCol.find({}).sort({ timestamp: 1 }).toArray();
+    const todayEvents = rawEvents.filter((ev) => {
+      const d = parseAppDate(ev.timestamp);
+      return d >= startOfToday && d <= endOfToday;
+    });
 
     const devices = await devCol.find({}).toArray();
-    const devMap = new Map(devices.map((d) => [d.id || d.deviceId, d.name || 'Terminal 1']));
+    const devMap = new Map(devices.map((d) => [String(d.id || d.deviceId), d.name || 'Terminal 1']));
 
     // Group events by employee
-    const checkinMap: Record<string, { firstIn: string; lastOut: string; deviceName: string }> = {};
+    const checkinMap: Record<string, { firstIn: string; lastOut: string; deviceName: string; punchCount: number }> = {};
     for (const ev of todayEvents) {
-      if (!ev.employeeId) continue;
-      const tsStr = ev.timestamp instanceof Date ? ev.timestamp.toISOString() : String(ev.timestamp);
-      if (!checkinMap[ev.employeeId]) {
-        checkinMap[ev.employeeId] = {
-          firstIn: tsStr,
-          lastOut: tsStr,
-          deviceName: devMap.get(ev.deviceId) || 'Terminal 1',
+      const emp = (ev.employeeId && empById.get(String(ev.employeeId))) || (ev.deviceUserId && empByDeviceUserId.get(String(ev.deviceUserId)));
+      if (!emp) continue;
+      const empId = String(emp.id || emp._id);
+
+      const d = parseAppDate(ev.timestamp);
+      const tsIso = d.toISOString();
+
+      if (!checkinMap[empId]) {
+        checkinMap[empId] = {
+          firstIn: tsIso,
+          lastOut: tsIso,
+          deviceName: devMap.get(String(ev.deviceId)) || 'Secureye S-FB3K',
+          punchCount: 1,
         };
       } else {
-        checkinMap[ev.employeeId].lastOut = tsStr;
+        const existingLast = parseAppDate(checkinMap[empId].lastOut);
+        if (d >= existingLast) {
+          checkinMap[empId].lastOut = tsIso;
+        }
+        checkinMap[empId].punchCount++;
       }
     }
 
@@ -72,6 +88,7 @@ export async function GET(req: NextRequest) {
           firstIn: `${todayStr}T${reg.requestedCheckIn}:00`,
           lastOut: reg.requestedCheckOut ? `${todayStr}T${reg.requestedCheckOut}:00` : `${todayStr}T${reg.requestedCheckIn}:00`,
           deviceName: 'Regularized (Manager Approved)',
+          punchCount: reg.requestedCheckOut ? 2 : 1,
         };
       }
     }
@@ -119,11 +136,20 @@ export async function GET(req: NextRequest) {
       }
 
       if (checkinMap[emp.id]) {
-        const inDate = new Date(checkinMap[emp.id].firstIn);
-        const inHour = inDate.getHours();
-        const inMin = inDate.getMinutes();
+        const inDate = parseAppDate(checkinMap[emp.id].firstIn);
+        const timeParts = new Intl.DateTimeFormat('en-IN', {
+          timeZone: 'Asia/Kolkata',
+          hour: 'numeric',
+          minute: 'numeric',
+          hour12: false,
+        }).formatToParts(inDate);
+
+        const inHour = Number(timeParts.find((p) => p.type === 'hour')?.value || '0');
+        const inMin = Number(timeParts.find((p) => p.type === 'minute')?.value || '0');
         const isLate = inHour > SHIFT_START_HOUR || (inHour === SHIFT_START_HOUR && inMin > SHIFT_START_MINUTE);
         if (isLate) lateCount++;
+
+        const hasCheckOut = checkinMap[emp.id].punchCount > 1 || checkinMap[emp.id].firstIn !== checkinMap[emp.id].lastOut;
 
         todayCheckIns.push({
           employeeId: emp.id,
@@ -132,7 +158,7 @@ export async function GET(req: NextRequest) {
           department: emp.department,
           designation: emp.designation,
           checkInTime: checkinMap[emp.id].firstIn,
-          checkOutTime: checkinMap[emp.id].firstIn !== checkinMap[emp.id].lastOut ? checkinMap[emp.id].lastOut : null,
+          checkOutTime: hasCheckOut ? checkinMap[emp.id].lastOut : null,
           status: isLate ? 'LATE' : 'ON_TIME',
           deviceName: checkinMap[emp.id].deviceName,
         });
