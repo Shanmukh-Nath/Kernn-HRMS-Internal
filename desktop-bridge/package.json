@@ -28,11 +28,29 @@
     },
     "mac": {
       "category": "public.app-category.business",
-      "icon": "app-icon.png",
+      "icon": "icon.png",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "darkModeSupport": true,
       "target": [
         { "target": "dmg", "arch": ["x64", "arm64"] },
         { "target": "zip", "arch": ["x64", "arm64"] }
       ]
+    },
+    "dmg": {
+      "title": "Kernn Sync Bridge Installer",
+      "background": "build/background.png",
+      "iconSize": 128,
+      "contents": [
+        { "x": 150, "y": 210, "type": "file" },
+        { "x": 450, "y": 210, "type": "link", "path": "/Applications" }
+      ],
+      "window": {
+        "width": 600,
+        "height": 420
+      }
     },
     "win": {
       "icon": "icon.ico",

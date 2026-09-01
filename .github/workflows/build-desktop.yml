@@ -1,0 +1,78 @@
+name: Build Desktop Bridge (Windows & macOS)
+
+on:
+  push:
+    paths:
+      - 'desktop-bridge/**'
+      - '.github/workflows/build-desktop.yml'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: desktop-bridge/package-lock.json
+
+      - name: Install dependencies
+        working-directory: desktop-bridge
+        run: npm ci
+
+      - name: Generate installer bitmaps
+        run: node scripts/make-installer-bitmaps.js
+
+      - name: Generate Windows icon
+        run: node scripts/create-ico.js
+
+      - name: Build Windows NSIS Step-by-Step Installer
+        working-directory: desktop-bridge
+        run: npm run build:win
+
+      - name: Upload Windows Setup Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kernn-Sync-Bridge-Windows-Setup
+          path: desktop-bridge/dist/Kernn Sync Bridge Setup *.exe
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: desktop-bridge/package-lock.json
+
+      - name: Install dependencies
+        working-directory: desktop-bridge
+        run: npm ci
+
+      - name: Generate macOS DMG Background
+        run: node scripts/make-mac-dmg-background.js
+
+      - name: Build macOS DMG (Intel & Apple Silicon)
+        working-directory: desktop-bridge
+        run: npm run build:mac
+        env:
+          # Optional Apple Developer ID Signing (set in repo secrets)
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+
+      - name: Upload macOS DMG Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kernn-Sync-Bridge-macOS-DMG
+          path: desktop-bridge/dist/Kernn Sync Bridge*.dmg
