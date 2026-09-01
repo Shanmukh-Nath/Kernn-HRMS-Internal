@@ -159,12 +159,14 @@ export async function POST(req: NextRequest) {
     const { deviceId = '102023050002456', sLogs = [] } = body;
 
     const auditCol = await hardwareAuditLogsCol();
-    const usersMap: Record<string, string> = {
-      '1': 'hemanth',
-      '2': 'karthik',
-      '3': 'test',
-      '6': 'shanmukh nath',
-    };
+    const empCol = await employeesCol();
+    const allEmps = await empCol.find({}).toArray();
+    const usersMap: Record<string, string> = {};
+    for (const emp of allEmps) {
+      if (emp.deviceUserId && emp.name) {
+        usersMap[String(emp.deviceUserId)] = emp.name;
+      }
+    }
 
     let count = 0;
     const now = new Date();

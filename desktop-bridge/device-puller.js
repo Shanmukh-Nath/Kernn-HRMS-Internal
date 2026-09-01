@@ -96,10 +96,6 @@ class DevicePuller {
       let streamEndTimer = null;
 
       let users = {
-        '1': 'hemanth',
-        '2': 'karthik',
-        '3': 'test',
-        '6': 'shanmukh nath',
         ...knownUsers,
       };
 

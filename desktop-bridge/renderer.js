@@ -394,6 +394,7 @@ function openDashboard() {
 
   refreshPasskeyUI();
   updateCloudLabels();
+  getKnownUsers();
   setStatus('Gateway Ready');
   log('ok', `Dashboard ready for ${s.name}`);
   reIcons();
@@ -738,28 +739,34 @@ async function executePush(records, btn) {
 
 // ─── Known Users Resolver ──────────────────────────────────────────────────
 async function getKnownUsers() {
-  const map = {
-    '1': 'hemanth',
-    '2': 'karthik',
-    '3': 'test',
-    '6': 'shanmukh nath',
-  };
-  if (!state.session?.token) return map;
+  const map = {};
+
+  // Load from local storage cache first
   try {
-    const res = await fetch(`${state.cloudUrl}/api/employees?limit=200`, {
-      headers: { Authorization: `Bearer ${state.session.token}` },
-    });
-    const json = await res.json();
-    const list = json.data?.employees || json.data || [];
-    if (Array.isArray(list)) {
-      list.forEach(emp => {
-        const uId = emp.deviceUserId || emp.employeeCode?.replace(/\D/g, '') || emp.id;
-        if (uId && emp.name) {
-          map[String(uId)] = emp.name;
-        }
-      });
-    }
+    const cached = localStorage.getItem('ksynbr_cached_staff');
+    if (cached) Object.assign(map, JSON.parse(cached));
   } catch (_) {}
+
+  // Fetch live from Cloud API if session token is available
+  if (state.session?.token) {
+    try {
+      const res = await fetch(`${state.cloudUrl}/api/employees?limit=200`, {
+        headers: { Authorization: `Bearer ${state.session.token}` },
+      });
+      const json = await res.json();
+      const list = json.data?.employees || json.data || [];
+      if (Array.isArray(list)) {
+        list.forEach((emp) => {
+          const uId = emp.deviceUserId || emp.employeeCode?.replace(/\D/g, '') || emp.id;
+          if (uId && emp.name) {
+            map[String(uId)] = emp.name;
+          }
+        });
+        localStorage.setItem('ksynbr_cached_staff', JSON.stringify(map));
+      }
+    } catch (_) {}
+  }
+
   return map;
 }
 
