@@ -1,0 +1,19 @@
+image: macOS
+
+stack: node 20
+
+install:
+  - node --version
+  - npm --version
+  - node scripts/make-mac-dmg-background.js
+  - cd desktop-bridge
+  - npm install
+
+build_script:
+  - npm run build:mac
+
+artifacts:
+  - path: desktop-bridge/dist/*.dmg
+    name: Kernn-Sync-Bridge-macOS-DMG
+  - path: desktop-bridge/dist/*.zip
+    name: Kernn-Sync-Bridge-macOS-ZIP

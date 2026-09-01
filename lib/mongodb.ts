@@ -8,9 +8,8 @@ try {
   // Ignore in environments where custom DNS cannot be set
 }
 
-const DIRECT_URI = 'mongodb://shanmukh733_db_user:AnI6iW5d3bdIsaSV@ac-grloq8u-shard-00-00.baj7suy.mongodb.net:27017,ac-grloq8u-shard-00-01.baj7suy.mongodb.net:27017,ac-grloq8u-shard-00-02.baj7suy.mongodb.net:27017/secureye_hrms?ssl=true&authSource=admin&retryWrites=true&w=majority&appName=HRMSProd';
 
-const uri = process.env.MONGODB_URI || process.env.DATABASE_URL || DIRECT_URI;
+const uri = process.env.MONGODB_URI || process.env.DATABASE_URL;
 
 declare global {
   // eslint-disable-next-line no-var

@@ -1,0 +1,22 @@
+workflows:
+  build-macos-app:
+    name: Build macOS DMG (Intel & Apple Silicon)
+    max_build_duration: 30
+    instance_type: mac_mini_m1
+    environment:
+      node: 20
+    scripts:
+      - name: Generate macOS DMG Background
+        script: |
+          node scripts/make-mac-dmg-background.js
+      - name: Install Desktop Bridge Dependencies
+        script: |
+          cd desktop-bridge
+          npm install
+      - name: Package macOS App & DMG
+        script: |
+          cd desktop-bridge
+          npm run build:mac
+    artifacts:
+      - desktop-bridge/dist/*.dmg
+      - desktop-bridge/dist/*.zip
