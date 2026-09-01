@@ -323,6 +323,12 @@ function PayrollContent() {
   const [requestingDownload, setRequestingDownload] = useState(false);
 
   const checkDownloadApproval = async (empId: string, m: number, y: number) => {
+    // Super Admin / HR Admins / Admins have instant privileged access with zero approvals needed
+    if (currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'HR_ADMIN' || currentUser?.role === 'ADMIN') {
+      setDownloadApprovalStatus('APPROVED');
+      return;
+    }
+
     try {
       const res = await fetch('/api/payroll/download-approval');
       const json = await res.json();
@@ -1482,6 +1488,13 @@ function PayrollContent() {
               </div>
             )}
 
+            {(currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'HR_ADMIN' || currentUser?.role === 'ADMIN') && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="font-semibold">Super Admin Direct Clearance: Instant Download & Print Authorized (No approvals needed)</span>
+              </div>
+            )}
+
             <div className="flex gap-2">
               {currentUser?.role === 'EMPLOYEE' && downloadApprovalStatus !== 'APPROVED' ? (
                 <button
@@ -1495,10 +1508,10 @@ function PayrollContent() {
               ) : (
                 <button
                   onClick={() => window.print()}
-                  className="w-1/2 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition flex items-center justify-center gap-1.5"
+                  className="w-1/2 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm"
                 >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Print Official Payslip</span>
+                  <Printer className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Download / Print Official Payslip</span>
                 </button>
               )}
               <button

@@ -17,6 +17,13 @@ import {
   ChevronLeft,
   ChevronRight,
   RefreshCw,
+  PlusCircle,
+  UserCheck,
+  Clock,
+  ShieldCheck,
+  AlertCircle,
+  CheckCircle2,
+  X,
 } from 'lucide-react';
 import { formatAppDate, formatAppTime } from '@/lib/timezone';
 
@@ -33,6 +40,25 @@ export default function AttendancePage() {
   const [verificationType, setVerificationType] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+
+  // User session & Employees list
+  const [currentUser, setCurrentUser] = useState<any | null>(null);
+  const [employeesList, setEmployeesList] = useState<any[]>([]);
+
+  // Super Admin Manual Attendance State
+  const [showManualModal, setShowManualModal] = useState(false);
+  const [manualSubmitting, setManualSubmitting] = useState(false);
+  const [manualError, setManualError] = useState('');
+  const [manualSuccess, setManualSuccess] = useState('');
+  const [manualEmployeeId, setManualEmployeeId] = useState('');
+  const [manualDate, setManualDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [manualTime, setManualTime] = useState(() => {
+    const now = new Date();
+    return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  });
+  const [manualEventType, setManualEventType] = useState('CHECK_IN');
+  const [manualVerificationType, setManualVerificationType] = useState('MANUAL_OVERRIDE');
+  const [manualRemarks, setManualRemarks] = useState('');
 
   // CSV Import Modal State
   const [showImportModal, setShowImportModal] = useState(false);
@@ -77,6 +103,30 @@ export default function AttendancePage() {
   }, [page, eventType, verificationType, startDate, endDate, search]);
 
   useEffect(() => {
+    // Fetch Current User
+    fetch('/api/auth/me')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && d.data?.user) {
+          setCurrentUser(d.data.user);
+        }
+      })
+      .catch(() => {});
+
+    // Fetch Employees list for manual logging
+    fetch('/api/employees')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && Array.isArray(d.data)) {
+          setEmployeesList(d.data);
+          if (d.data.length > 0) {
+            setManualEmployeeId(d.data[0].id);
+          }
+        }
+      })
+      .catch(() => {});
+
+    // Fetch Devices
     fetch('/api/devices')
       .then((r) => r.json())
       .then((d) => {
@@ -86,6 +136,45 @@ export default function AttendancePage() {
         }
       });
   }, []);
+
+  const handleManualSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setManualError('');
+    setManualSuccess('');
+    setManualSubmitting(true);
+
+    try {
+      const res = await fetch('/api/attendance/manual', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId: manualEmployeeId,
+          date: manualDate,
+          time: manualTime,
+          eventType: manualEventType,
+          verificationType: manualVerificationType,
+          remarks: manualRemarks,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        throw new Error(json.error?.message || 'Failed to log manual attendance.');
+      }
+
+      setManualSuccess(json.message || 'Attendance logged successfully!');
+      setTimeout(() => {
+        setShowManualModal(false);
+        setManualSuccess('');
+        setManualRemarks('');
+        fetchAttendance();
+      }, 1000);
+    } catch (err: any) {
+      setManualError(err.message || 'An error occurred.');
+    } finally {
+      setManualSubmitting(false);
+    }
+  };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,6 +256,11 @@ export default function AttendancePage() {
     }
   };
 
+  const canManage =
+    currentUser?.role === 'SUPER_ADMIN' ||
+    currentUser?.role === 'HR_ADMIN' ||
+    currentUser?.role === 'ADMIN';
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header & Export Actions */}
@@ -178,7 +272,21 @@ export default function AttendancePage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {canManage && (
+            <button
+              onClick={() => {
+                setShowManualModal(true);
+                setManualError('');
+                setManualSuccess('');
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-sm font-bold rounded-lg shadow-sm shadow-emerald-500/20 transition"
+            >
+              <PlusCircle className="w-4 h-4" />
+              + Manual Punch / Log Attendance
+            </button>
+          )}
+
           <button
             onClick={() => setShowImportModal(true)}
             className="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-lg border border-slate-200 shadow-sm transition"
@@ -242,6 +350,7 @@ export default function AttendancePage() {
             <option value="FACE">Face</option>
             <option value="CARD">Card</option>
             <option value="PASSWORD">Password</option>
+            <option value="MANUAL_OVERRIDE">Manual Override</option>
           </select>
 
           {/* Date Range Inputs */}
@@ -294,44 +403,71 @@ export default function AttendancePage() {
                   </td>
                 </tr>
               ) : (
-                events.map((evt) => (
-                  <tr key={evt.id} className="hover:bg-slate-50/60 transition">
-                    <td className="px-6 py-4">
-                      <div className="font-semibold text-slate-900">
-                        {evt.employee?.name || `Employee ${evt.deviceUserId}`}
-                      </div>
-                      <div className="text-xs text-slate-400 font-mono">
-                        {evt.employee?.employeeCode || `EMP-${evt.deviceUserId}`}
-                      </div>
-                    </td>
+                events.map((evt) => {
+                  let rawMeta: any = null;
+                  try {
+                    if (evt.rawPayload) rawMeta = JSON.parse(evt.rawPayload);
+                  } catch (_) {}
 
-                    <td className="px-6 py-4 font-mono text-xs font-semibold text-slate-700">
-                      #{evt.deviceUserId}
-                    </td>
+                  return (
+                    <tr key={evt.id} className="hover:bg-slate-50/60 transition">
+                      <td className="px-6 py-4">
+                        <div className="font-semibold text-slate-900">
+                          {evt.employee?.name || `Employee ${evt.deviceUserId}`}
+                        </div>
+                        <div className="text-xs text-slate-400 font-mono">
+                          {evt.employee?.employeeCode || `EMP-${evt.deviceUserId}`}
+                        </div>
+                      </td>
 
-                    <td className="px-6 py-4 font-mono text-xs text-slate-700">
-                      {formatAppDate(evt.timestamp)}
-                    </td>
+                      <td className="px-6 py-4 font-mono text-xs font-semibold text-slate-700">
+                        #{evt.deviceUserId}
+                      </td>
 
-                    <td className="px-6 py-4 font-mono text-xs font-bold text-slate-900">
-                      {formatAppTime(evt.timestamp)}
-                    </td>
+                      <td className="px-6 py-4 font-mono text-xs text-slate-700">
+                        {formatAppDate(evt.timestamp)}
+                      </td>
 
-                    <td className="px-6 py-4">{getEventBadge(evt.eventType)}</td>
+                      <td className="px-6 py-4 font-mono text-xs font-bold text-slate-900">
+                        {formatAppTime(evt.timestamp)}
+                      </td>
 
-                    <td className="px-6 py-4">{getVerificationBadge(evt.verificationType)}</td>
+                      <td className="px-6 py-4">{getEventBadge(evt.eventType)}</td>
 
-                    <td className="px-6 py-4 text-xs text-slate-600">
-                      {evt.device?.name || evt.deviceId}
-                    </td>
+                      <td className="px-6 py-4">
+                        {evt.verificationType === 'MANUAL_OVERRIDE' || evt.source === 'MANUAL_ENTRY' ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            title={rawMeta?.remarks ? `Admin Remark: ${rawMeta.remarks}` : 'Manual entry by Administrator'}
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Manual Override
+                          </span>
+                        ) : (
+                          getVerificationBadge(evt.verificationType)
+                        )}
+                      </td>
 
-                    <td className="px-6 py-4">
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 font-semibold text-slate-600 border border-slate-200">
-                        {evt.source}
-                      </span>
-                    </td>
-                  </tr>
-                ))
+                      <td className="px-6 py-4 text-xs text-slate-600">
+                        {evt.device?.name || evt.deviceId}
+                      </td>
+
+                      <td className="px-6 py-4">
+                        {evt.source === 'MANUAL_ENTRY' ? (
+                          <span
+                            className="text-[10px] px-2 py-0.5 rounded bg-emerald-100/70 font-bold text-emerald-800 border border-emerald-300"
+                            title={rawMeta?.manualLoggedBy ? `Logged by: ${rawMeta.manualLoggedBy}` : 'Super Admin Override'}
+                          >
+                            MANUAL ENTRY
+                          </span>
+                        ) : (
+                          <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 font-semibold text-slate-600 border border-slate-200">
+                            {evt.source}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -365,6 +501,177 @@ export default function AttendancePage() {
           </div>
         </div>
       </div>
+
+      {/* Super Admin Manual Attendance Logging Modal */}
+      {showManualModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 overflow-hidden">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                  <UserCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Manual Attendance Entry</h3>
+                  <p className="text-xs text-slate-400">Super Admin & HR Direct Punch Override</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowManualModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {manualError && (
+              <div className="mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                <span>{manualError}</span>
+              </div>
+            )}
+
+            {manualSuccess && (
+              <div className="mt-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{manualSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleManualSubmit} className="space-y-4 mt-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Select Employee *</label>
+                <select
+                  required
+                  value={manualEmployeeId}
+                  onChange={(e) => setManualEmployeeId(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 font-medium bg-white"
+                >
+                  {employeesList.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name} ({emp.employeeCode || `ID #${emp.deviceUserId}`}) — {emp.department || 'General'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Punch Date *</label>
+                  <input
+                    type="date"
+                    required
+                    value={manualDate}
+                    onChange={(e) => setManualDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono text-xs"
+                  />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-bold text-slate-700">Punch Time *</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const now = new Date();
+                        setManualTime(
+                          `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+                        );
+                      }}
+                      className="text-[10px] text-emerald-600 font-bold hover:underline"
+                    >
+                      Set Current Time
+                    </button>
+                  </div>
+                  <input
+                    type="time"
+                    step="1"
+                    required
+                    value={manualTime}
+                    onChange={(e) => setManualTime(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Event Type *</label>
+                  <select
+                    value={manualEventType}
+                    onChange={(e) => setManualEventType(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 bg-white"
+                  >
+                    <option value="CHECK_IN">Check-In</option>
+                    <option value="CHECK_OUT">Check-Out</option>
+                    <option value="BREAK_IN">Break-In</option>
+                    <option value="BREAK_OUT">Break-Out</option>
+                    <option value="GENERAL_PUNCH">General Punch</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Verification Mode</label>
+                  <select
+                    value={manualVerificationType}
+                    onChange={(e) => setManualVerificationType(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 bg-white"
+                  >
+                    <option value="MANUAL_OVERRIDE">Admin Manual Override</option>
+                    <option value="FINGERPRINT">Fingerprint Verified</option>
+                    <option value="FACE">Facial Recognition</option>
+                    <option value="CARD">RFID Smart Card</option>
+                    <option value="PASSWORD">Keypad PIN / Password</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Audit Reason / Remarks</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Device connectivity downtime, field duty on-site, biometric sensor glitch"
+                  value={manualRemarks}
+                  onChange={(e) => setManualRemarks(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
+                />
+              </div>
+
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-[11px] text-slate-500 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>
+                  This manual log entry will be saved to the permanent audit ledger with administrator credentials.
+                </span>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowManualModal(false)}
+                  className="px-4 py-2 border border-slate-300 rounded-xl text-slate-700 hover:bg-slate-50 font-semibold transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={manualSubmitting}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-sm shadow-emerald-600/30 transition flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {manualSubmitting ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Logging...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Save Manual Punch</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* CSV Import Fallback Modal */}
       {showImportModal && (
@@ -428,3 +735,4 @@ export default function AttendancePage() {
     </div>
   );
 }
+
