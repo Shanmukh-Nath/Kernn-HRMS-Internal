@@ -181,6 +181,11 @@ export async function leaveAccrualLogsCol(): Promise<Collection<any>> {
   return db.collection('leave_accrual_logs');
 }
 
+export async function compOffClaimsCol(): Promise<Collection<any>> {
+  const db = await getMongoDb();
+  return db.collection('comp_off_claims');
+}
+
 // Index Management
 export async function ensureMongoIndices(): Promise<void> {
   try {

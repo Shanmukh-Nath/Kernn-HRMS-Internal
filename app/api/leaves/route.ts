@@ -244,14 +244,30 @@ export async function POST(req: NextRequest) {
       leaveTypeId: leaveType.id || body.leaveTypeId,
     });
 
-    if (balanceRecord && !leaveType.allowNegativeBalance) {
-      if (balanceRecord.balance < totalDays) {
+    const isCompOff = leaveType.code === 'COMP_OFF' || leaveType.category === 'Compensatory';
+    const currentBalance = Number(balanceRecord?.balance) || 0;
+
+    if (isCompOff) {
+      if (currentBalance < totalDays) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'INSUFFICIENT_COMP_OFF_BALANCE',
+              message: `Insufficient Compensatory Off balance. You currently have ${currentBalance} Comp-Off days earned. Comp-Off is granted only after an approved weekend or public holiday work shift.`,
+            },
+          },
+          { status: 400 }
+        );
+      }
+    } else if (!leaveType.allowNegativeBalance) {
+      if (currentBalance < totalDays) {
         return NextResponse.json(
           {
             success: false,
             error: {
               code: 'INSUFFICIENT_BALANCE',
-              message: `Insufficient balance: You have ${balanceRecord.balance} days available, but requested ${totalDays} day(s). Negative balance overdraft is not permitted for '${leaveType.name}'.`,
+              message: `Insufficient balance: You have ${currentBalance} days available, but requested ${totalDays} day(s). Negative balance overdraft is not permitted for '${leaveType.name}'.`,
             },
           },
           { status: 400 }
@@ -259,13 +275,13 @@ export async function POST(req: NextRequest) {
       }
     } else if (balanceRecord && leaveType.allowNegativeBalance) {
       const overdraftFloor = Number(leaveType.negativeBalanceLimit) || -5.0;
-      if (balanceRecord.balance - totalDays < overdraftFloor) {
+      if (currentBalance - totalDays < overdraftFloor) {
         return NextResponse.json(
           {
             success: false,
             error: {
               code: 'OVERDRAFT_LIMIT_EXCEEDED',
-              message: `Overdraft Limit Reached: '${leaveType.name}' permits maximum negative balance of ${overdraftFloor} days. Your balance would become ${(balanceRecord.balance - totalDays).toFixed(1)} days.`,
+              message: `Overdraft Limit Reached: '${leaveType.name}' permits maximum negative balance of ${overdraftFloor} days. Your balance would become ${(currentBalance - totalDays).toFixed(1)} days.`,
             },
           },
           { status: 400 }

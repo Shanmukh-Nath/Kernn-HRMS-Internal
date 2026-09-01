@@ -115,6 +115,7 @@ async function seed() {
     { id: 'lt_cl', name: 'Casual Leave', code: 'CL', daysPerYear: 12, accrualFrequency: 'MONTHLY', isPaid: true, colorHex: '#3B82F6' },
     { id: 'lt_sl', name: 'Sick Leave', code: 'SL', daysPerYear: 12, accrualFrequency: 'YEARLY', isPaid: true, colorHex: '#10B981' },
     { id: 'lt_pl', name: 'Paid Privilege Leave', code: 'PL', daysPerYear: 15, accrualFrequency: 'MONTHLY', isPaid: true, colorHex: '#8B5CF6' },
+    { id: 'lt_compoff', name: 'Compensatory Off', code: 'COMP_OFF', daysPerYear: 0, accrualFrequency: 'ON_DEMAND', isPaid: true, colorHex: '#F59E0B' },
     { id: 'lt_lop', name: 'Loss of Pay', code: 'LOP', daysPerYear: 0, accrualFrequency: 'YEARLY', isPaid: false, colorHex: '#EF4444' },
   ];
 

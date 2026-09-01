@@ -37,6 +37,7 @@ import {
   Play,
   RotateCcw,
   TrendingUp,
+  Gift,
 } from 'lucide-react';
 import { format, differenceInCalendarDays } from 'date-fns';
 import { useSearchParams } from 'next/navigation';
@@ -50,14 +51,34 @@ function LeavesContent() {
       ? 'APPROVALS'
       : searchParams.get('tab') === 'ACCRUALS'
       ? 'ACCRUALS'
+      : searchParams.get('tab') === 'COMPOFF'
+      ? 'COMPOFF'
       : 'DESK';
 
-  const [activeTab, setActiveTab] = useState<'DESK' | 'APPROVALS' | 'POLICIES' | 'ACCRUALS'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'DESK' | 'APPROVALS' | 'POLICIES' | 'ACCRUALS' | 'COMPOFF'>(initialTab);
   const [balances, setBalances] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<any | null>(null);
+
+  // Comp-Off state
+  const [compOffClaims, setCompOffClaims] = useState<any[]>([]);
+  const [allEmployees, setAllEmployees] = useState<any[]>([]);
+  const [showClaimModal, setShowClaimModal] = useState(false);
+  const [showGrantModal, setShowGrantModal] = useState(false);
+  const [compOffLoading, setCompOffLoading] = useState(false);
+  const [claimForm, setClaimForm] = useState({
+    workedDate: format(new Date(), 'yyyy-MM-dd'),
+    reason: '',
+    creditDays: 1.0,
+  });
+  const [grantForm, setGrantForm] = useState({
+    employeeId: '',
+    workedDate: format(new Date(), 'yyyy-MM-dd'),
+    reason: '',
+    creditDays: 1.0,
+  });
 
   // Accruals state
   const [accrualData, setAccrualData] = useState<{
@@ -161,17 +182,21 @@ function LeavesContent() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [meRes, leavesRes, typesRes, accrualsRes] = await Promise.all([
+      const [meRes, leavesRes, typesRes, accrualsRes, compOffRes, empRes] = await Promise.all([
         fetch('/api/auth/me'),
         fetch('/api/leaves'),
         fetch('/api/leaves/types'),
         fetch('/api/leaves/accruals'),
+        fetch('/api/leaves/comp-off'),
+        fetch('/api/employees'),
       ]);
 
       const meJson = await meRes.json();
       const leavesJson = await leavesRes.json();
       const typesJson = await typesRes.json();
       const accrualsJson = await accrualsRes.json();
+      const compOffJson = await compOffRes.json();
+      const empJson = await empRes.json();
 
       if (meJson.success) {
         setCurrentUser(meJson.data.user);
@@ -189,10 +214,112 @@ function LeavesContent() {
       if (accrualsJson.success) {
         setAccrualData(accrualsJson.data);
       }
+      if (compOffJson.success) {
+        setCompOffClaims(compOffJson.data || []);
+      }
+      if (empJson.success) {
+        setAllEmployees(empJson.data || []);
+        if (empJson.data?.length > 0 && !grantForm.employeeId) {
+          setGrantForm((prev) => ({ ...prev, employeeId: empJson.data[0].id }));
+        }
+      }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleClaimCompOff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCompOffLoading(true);
+    try {
+      const res = await fetch('/api/leaves/comp-off', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'CLAIM',
+          workedDate: claimForm.workedDate,
+          creditDays: Number(claimForm.creditDays) || 1.0,
+          reason: claimForm.reason,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        alert(json.message || 'Comp-Off claim submitted for approval!');
+        setShowClaimModal(false);
+        setClaimForm({
+          workedDate: format(new Date(), 'yyyy-MM-dd'),
+          reason: '',
+          creditDays: 1.0,
+        });
+        fetchData();
+      } else {
+        alert(json.error?.message || 'Failed to submit claim');
+      }
+    } catch {
+      alert('Network error submitting Comp-Off claim');
+    } finally {
+      setCompOffLoading(false);
+    }
+  };
+
+  const handleGrantCompOff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCompOffLoading(true);
+    try {
+      const res = await fetch('/api/leaves/comp-off', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'GRANT',
+          employeeId: grantForm.employeeId,
+          workedDate: grantForm.workedDate,
+          creditDays: Number(grantForm.creditDays) || 1.0,
+          reason: grantForm.reason,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        alert(json.message || 'Comp-Off credit granted successfully!');
+        setShowGrantModal(false);
+        setGrantForm({
+          employeeId: allEmployees[0]?.id || '',
+          workedDate: format(new Date(), 'yyyy-MM-dd'),
+          reason: '',
+          creditDays: 1.0,
+        });
+        fetchData();
+      } else {
+        alert(json.error?.message || 'Failed to grant Comp-Off');
+      }
+    } catch {
+      alert('Network error granting Comp-Off');
+    } finally {
+      setCompOffLoading(false);
+    }
+  };
+
+  const handleCompOffAction = async (claimId: string, action: 'APPROVED' | 'REJECTED') => {
+    const reason = action === 'REJECTED' ? prompt('Enter rejection reason:') : null;
+    if (action === 'REJECTED' && !reason) return;
+    if (!confirm(`${action === 'APPROVED' ? 'Approve and credit balance for' : 'Reject'} this Comp-Off claim?`)) return;
+
+    try {
+      const res = await fetch(`/api/leaves/comp-off/${claimId}/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, rejectionReason: reason }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        alert(json.message);
+        fetchData();
+      } else {
+        alert(json.error?.message || 'Action failed');
+      }
+    } catch {
+      alert('Error updating claim status');
     }
   };
 
@@ -580,6 +707,21 @@ function LeavesContent() {
             </span>
           </button>
         )}
+
+        <button
+          onClick={() => setActiveTab('COMPOFF')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+            activeTab === 'COMPOFF'
+              ? 'bg-amber-500 text-slate-950 shadow-sm font-extrabold'
+              : 'text-slate-700 hover:text-slate-900 hover:bg-white/60'
+          }`}
+        >
+          <Gift className="w-4 h-4 text-amber-700" />
+          <span>Comp-Off Desk</span>
+          <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono ${activeTab === 'COMPOFF' ? 'bg-slate-950 text-amber-400' : 'bg-amber-100 text-amber-900'}`}>
+            {balances.find((b) => b.leaveType?.code === 'COMP_OFF')?.balance || 0}d Available
+          </span>
+        </button>
 
         {isPolicyAdmin && (
           <button
@@ -1224,6 +1366,279 @@ function LeavesContent() {
       )}
 
       {/* ========================================================================= */}
+      {/* TAB 5: COMPENSATORY OFF (COMP-OFF) DESK */}
+      {/* ========================================================================= */}
+      {activeTab === 'COMPOFF' && (
+        <div className="space-y-6 animate-fadeIn">
+          {/* Header Banner & Summary */}
+          <div className="p-6 rounded-3xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-200/80 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-amber-100 text-amber-900 border border-amber-300">
+                <Gift className="w-3 h-3 text-amber-700" />
+                <span>Earn-On-Demand Policy</span>
+              </div>
+              <h3 className="text-xl font-black text-slate-900">Compensatory Off (Comp-Off) Desk</h3>
+              <p className="text-xs text-slate-600 max-w-2xl">
+                Employees earn Comp-Off credit by working on declared weekends (Saturday/Sunday) or company holidays.
+                Credit is earned upon biometric punch verification and manager approval, and remains valid for 90 days.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setShowClaimModal(true)}
+                className="px-4 py-2.5 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-xs transition flex items-center gap-1.5"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Claim Weekend Shift</span>
+              </button>
+
+              {isManagerOrAdmin && (
+                <button
+                  onClick={() => setShowGrantModal(true)}
+                  className="px-4 py-2.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-xs transition flex items-center gap-1.5"
+                >
+                  <Award className="w-4 h-4 text-amber-400" />
+                  <span>Direct Grant Comp-Off</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Metric Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs">
+              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                My Available Comp-Off Balance
+              </div>
+              <div className="text-3xl font-black font-mono text-amber-600 mt-1 flex items-baseline gap-1.5">
+                {balances.find((b) => b.leaveType?.code === 'COMP_OFF')?.balance || 0}
+                <span className="text-xs font-normal text-slate-500 font-sans">days available</span>
+              </div>
+              <div className="text-[11px] text-slate-500 mt-2">
+                100% Paid Leave · 0 Loss of Pay (LOP)
+              </div>
+            </div>
+
+            <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs">
+              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                My Total Shifts Claimed
+              </div>
+              <div className="text-3xl font-black font-mono text-slate-900 mt-1 flex items-baseline gap-1.5">
+                {compOffClaims.length}
+                <span className="text-xs font-normal text-slate-500 font-sans">total shift(s)</span>
+              </div>
+              <div className="text-[11px] text-slate-500 mt-2">
+                {compOffClaims.filter((c) => c.status === 'APPROVED').length} Approved · {compOffClaims.filter((c) => c.status === 'PENDING').length} Pending
+              </div>
+            </div>
+
+            <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs">
+              <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                Comp-Off Policy Rules
+              </div>
+              <div className="text-xs font-bold text-slate-800 mt-1">
+                Valid for 90 Days from Worked Date
+              </div>
+              <div className="text-[11px] text-slate-500 mt-1 space-y-0.5">
+                <div>• Automatic biometric punch verification</div>
+                <div>• Applicable for unforeseen holiday day-swaps</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Pending Claims Table for Managers / Admins */}
+          {isManagerOrAdmin && compOffClaims.filter((c) => c.status === 'PENDING').length > 0 && (
+            <div className="bg-white rounded-3xl border border-amber-200 shadow-xs overflow-hidden">
+              <div className="p-5 bg-amber-50/50 border-b border-amber-200 flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-amber-950 flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600" />
+                    <span>Pending Weekend Work Comp-Off Claims (Action Required)</span>
+                  </h3>
+                  <p className="text-[11px] text-amber-800">
+                    Verify biometric machine attendance and approve to credit employee Comp-Off leave balance.
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 rounded-full text-xs font-mono font-bold bg-amber-200 text-amber-900">
+                  {compOffClaims.filter((c) => c.status === 'PENDING').length} Pending
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
+                      <th className="py-3.5 px-6">Employee</th>
+                      <th className="py-3.5 px-6">Worked Date</th>
+                      <th className="py-3.5 px-6">Biometric Punch Record</th>
+                      <th className="py-3.5 px-6">Reason / Tasks Done</th>
+                      <th className="py-3.5 px-6">Credit Requested</th>
+                      <th className="py-3.5 px-6 text-right">Decision</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {compOffClaims
+                      .filter((c) => c.status === 'PENDING')
+                      .map((c) => (
+                        <tr key={c.id} className="hover:bg-amber-50/30 transition">
+                          <td className="py-4 px-6 font-medium text-slate-900">
+                            <div className="font-bold">{c.employeeName}</div>
+                            <div className="text-[10px] text-slate-500 font-mono">{c.employeeCode} · {c.department}</div>
+                          </td>
+                          <td className="py-4 px-6 font-mono font-bold text-slate-800">
+                            <div>{c.workedDate}</div>
+                            <div className="text-[10px] font-normal text-amber-700 font-sans">
+                              {c.dayOfWeek} ({c.isWeekend ? 'Weekend' : 'Public Holiday'})
+                            </div>
+                          </td>
+                          <td className="py-4 px-6">
+                            {c.verifiedBiometric ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <CheckCircle2 className="w-3 h-3" />
+                                {c.punchIn} - {c.punchOut} (Biometric Verified)
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                <Clock className="w-3 h-3" />
+                                Manual Claim (No Punch Found)
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-6 max-w-xs text-slate-600">
+                            <div className="truncate" title={c.reason}>{c.reason}</div>
+                          </td>
+                          <td className="py-4 px-6 font-mono font-bold text-amber-700">
+                            +{c.creditDays} day(s)
+                          </td>
+                          <td className="py-4 px-6 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => handleCompOffAction(c.id, 'APPROVED')}
+                                className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-2xs transition"
+                              >
+                                Approve & Credit
+                              </button>
+                              <button
+                                onClick={() => handleCompOffAction(c.id, 'REJECTED')}
+                                className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 font-bold text-[11px] border border-slate-200 transition"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* All Comp-Off History */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Comp-Off Shift Claims & Grant History</h3>
+                <p className="text-xs text-slate-500">Record of all weekend/holiday shifts claimed, verified, and approved.</p>
+              </div>
+              <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-700">
+                {compOffClaims.length} Records
+              </span>
+            </div>
+
+            {compOffClaims.length === 0 ? (
+              <div className="p-12 text-center space-y-3">
+                <Gift className="w-10 h-10 text-slate-300 mx-auto" />
+                <div className="text-sm font-bold text-slate-700">No Comp-Off Claims Yet</div>
+                <p className="text-xs text-slate-400">
+                  Click &quot;Claim Weekend Shift&quot; above to submit credit after working on a Saturday, Sunday, or Holiday.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
+                      <th className="py-3.5 px-6">Employee</th>
+                      <th className="py-3.5 px-6">Worked Date</th>
+                      <th className="py-3.5 px-6">Punches / Verification</th>
+                      <th className="py-3.5 px-6">Reason</th>
+                      <th className="py-3.5 px-6">Credit</th>
+                      <th className="py-3.5 px-6 text-center">Status</th>
+                      <th className="py-3.5 px-6 text-right">Approval / Expiry</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {compOffClaims.map((c) => (
+                      <tr key={c.id} className="hover:bg-slate-50/80 transition">
+                        <td className="py-4 px-6 font-medium text-slate-900">
+                          <div className="font-bold">{c.employeeName}</div>
+                          <div className="text-[10px] text-slate-500 font-mono">{c.employeeCode}</div>
+                        </td>
+                        <td className="py-4 px-6 font-mono font-bold text-slate-800">
+                          <div>{c.workedDate}</div>
+                          <div className="text-[10px] font-normal text-slate-500 font-sans">{c.dayOfWeek}</div>
+                        </td>
+                        <td className="py-4 px-6">
+                          {c.verifiedBiometric ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              <CheckCircle2 className="w-3 h-3" />
+                              {c.punchIn} - {c.punchOut} (Biometric)
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">Manual Entry</span>
+                          )}
+                        </td>
+                        <td className="py-4 px-6 max-w-xs text-slate-600">
+                          <div className="truncate" title={c.reason}>{c.reason}</div>
+                          {c.rejectionReason && (
+                            <div className="text-[10px] text-rose-600 italic mt-0.5">Rejected: {c.rejectionReason}</div>
+                          )}
+                        </td>
+                        <td className="py-4 px-6 font-mono font-bold text-amber-700">
+                          +{c.creditDays}d
+                        </td>
+                        <td className="py-4 px-6 text-center whitespace-nowrap">
+                          {c.status === 'APPROVED' && (
+                            <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              Approved & Credited
+                            </span>
+                          )}
+                          {c.status === 'PENDING' && (
+                            <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                              Pending Approval
+                            </span>
+                          )}
+                          {c.status === 'REJECTED' && (
+                            <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                              Rejected
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-4 px-6 text-right font-mono text-[11px] text-slate-500">
+                          {c.approvedBy ? (
+                            <div>
+                              <div className="text-slate-800 font-semibold">{c.approvedBy}</div>
+                              <div className="text-[10px] text-slate-400">
+                                Expires: {c.expiryDate ? format(new Date(c.expiryDate), 'dd MMM yyyy') : '90 Days'}
+                              </div>
+                            </div>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
       {/* 6-TAB LEAVE POLICY BUILDER MODAL */}
       {/* ========================================================================= */}
       {editingType && (
@@ -1756,6 +2171,29 @@ function LeavesContent() {
                       <span>Policy Alert: Exceeds max duration limit of {selectedType.maxDaysAllowed} days.</span>
                     </div>
                   )}
+
+                  {(selectedType.code === 'COMP_OFF' || selectedType.category === 'Compensatory') && (
+                    <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 space-y-1.5 mt-2">
+                      <div className="flex items-center justify-between text-[11px] font-bold text-amber-900">
+                        <span className="flex items-center gap-1.5">
+                          <Gift className="w-3.5 h-3.5 text-amber-700" />
+                          <span>Comp-Off Balance Available:</span>
+                        </span>
+                        <span className="font-mono text-xs px-2 py-0.5 rounded bg-amber-100 border border-amber-300 font-black">
+                          {balances.find((b) => b.leaveType?.code === 'COMP_OFF')?.balance || 0} Day(s)
+                        </span>
+                      </div>
+                      {(balances.find((b) => b.leaveType?.code === 'COMP_OFF')?.balance || 0) < computedDays ? (
+                        <p className="text-[10px] text-rose-700 font-semibold leading-relaxed">
+                          ⚠ Insufficient balance: You currently have {balances.find((b) => b.leaveType?.code === 'COMP_OFF')?.balance || 0} Comp-Off day(s) earned. Comp-Off is granted only after working on a weekend (Saturday/Sunday) or public holiday. Use the &quot;Comp-Off Desk&quot; to claim credit for weekend shifts worked.
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-emerald-800 font-medium">
+                          ✓ Sufficient Comp-Off balance. {computedDays} day(s) will be deducted upon approval.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1881,13 +2319,25 @@ function LeavesContent() {
                 />
               </div>
 
-              <button
-                type="submit"
-                disabled={submitting || compressing}
-                className="w-full py-2.5 bg-[#a92427] hover:bg-[#8e1d20] text-white text-xs font-bold rounded-xl shadow-xs transition disabled:opacity-50"
-              >
-                {submitting ? 'Validating against Policy Engine...' : 'Submit Application'}
-              </button>
+              {(() => {
+                const isCompOffActive = selectedType?.code === 'COMP_OFF' || selectedType?.category === 'Compensatory';
+                const compOffBal = balances.find((b) => b.leaveType?.code === 'COMP_OFF')?.balance || 0;
+                const isCompOffShortage = isCompOffActive && compOffBal < computedDays;
+
+                return (
+                  <button
+                    type="submit"
+                    disabled={submitting || compressing || isCompOffShortage}
+                    className="w-full py-2.5 bg-[#a92427] hover:bg-[#8e1d20] text-white text-xs font-bold rounded-xl shadow-xs transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {submitting
+                      ? 'Validating against Policy Engine...'
+                      : isCompOffShortage
+                      ? 'Cannot Submit: Insufficient Comp-Off Balance'
+                      : 'Submit Application'}
+                  </button>
+                );
+              })()}
             </form>
           </div>
         </div>
@@ -2069,6 +2519,188 @@ function LeavesContent() {
                 Close Details
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* CLAIM WEEKEND / HOLIDAY SHIFT COMP-OFF MODAL */}
+      {/* ========================================================================= */}
+      {showClaimModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp text-xs">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Gift className="w-5 h-5 text-amber-600" />
+                  <span>Claim Weekend / Holiday Shift Credit</span>
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Submit a Comp-Off credit request for working on a Saturday, Sunday, or declared holiday.
+                </p>
+              </div>
+              <button onClick={() => setShowClaimModal(false)} className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleClaimCompOff} className="space-y-3.5">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Date Worked (Weekend / Holiday)</label>
+                <input
+                  type="date"
+                  value={claimForm.workedDate}
+                  onChange={(e) => setClaimForm({ ...claimForm, workedDate: e.target.value })}
+                  required
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono font-medium focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Credit Requested</label>
+                <select
+                  value={claimForm.creditDays}
+                  onChange={(e) => setClaimForm({ ...claimForm, creditDays: Number(e.target.value) })}
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-bold"
+                >
+                  <option value={1.0}>1.0 Full Day Comp-Off Credit (&gt; 7.5 hrs)</option>
+                  <option value={0.5}>0.5 Half Day Comp-Off Credit (4 to 7.5 hrs)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Tasks / Reason for Working on Off-Day</label>
+                <textarea
+                  value={claimForm.reason}
+                  onChange={(e) => setClaimForm({ ...claimForm, reason: e.target.value })}
+                  placeholder="e.g. Worked Saturday to compensate for upcoming Friday holiday / Server migration sprint..."
+                  rows={3}
+                  required
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[10px] space-y-0.5">
+                <div className="font-bold flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-700" />
+                  <span>Biometric Machine Verification Active</span>
+                </div>
+                <p>The system will automatically match your biometric terminal punch times when submitted for approval.</p>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowClaimModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={compOffLoading}
+                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-xs transition disabled:opacity-50"
+                >
+                  {compOffLoading ? 'Verifying & Submitting...' : 'Submit Comp-Off Claim'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* DIRECT GRANT COMP-OFF MODAL (MANAGER / ADMIN) */}
+      {/* ========================================================================= */}
+      {showGrantModal && isManagerOrAdmin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp text-xs">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Award className="w-5 h-5 text-amber-600" />
+                  <span>Direct Grant Comp-Off Leave Balance</span>
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Manager/Admin override: Immediately credit Comp-Off days to an employee.
+                </p>
+              </div>
+              <button onClick={() => setShowGrantModal(false)} className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleGrantCompOff} className="space-y-3.5">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Select Employee</label>
+                <select
+                  value={grantForm.employeeId}
+                  onChange={(e) => setGrantForm({ ...grantForm, employeeId: e.target.value })}
+                  required
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-bold"
+                >
+                  {allEmployees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.name} ({emp.employeeCode || 'EMP'}) — {emp.department}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Worked Date</label>
+                  <input
+                    type="date"
+                    value={grantForm.workedDate}
+                    onChange={(e) => setGrantForm({ ...grantForm, workedDate: e.target.value })}
+                    required
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Credit Amount</label>
+                  <select
+                    value={grantForm.creditDays}
+                    onChange={(e) => setGrantForm({ ...grantForm, creditDays: Number(e.target.value) })}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-bold font-mono text-amber-700"
+                  >
+                    <option value={1.0}>+1.0 Day</option>
+                    <option value={0.5}>+0.5 Day</option>
+                    <option value={2.0}>+2.0 Days</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Grant Note / Authorization Reason</label>
+                <textarea
+                  value={grantForm.reason}
+                  onChange={(e) => setGrantForm({ ...grantForm, reason: e.target.value })}
+                  placeholder="e.g. Authorized weekend hardware deployment / sudden holiday compensation..."
+                  rows={2}
+                  required
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowGrantModal(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={compOffLoading}
+                  className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold shadow-xs transition disabled:opacity-50"
+                >
+                  {compOffLoading ? 'Crediting Balance...' : 'Grant & Credit Balance'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
