@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getAuthSession } from '@/lib/auth';
+import { parseAppDate } from '@/lib/timezone';
 import { getMongoDb, generateId } from '@/lib/mongodb';
 
 export const dynamic = 'force-dynamic';
@@ -63,10 +64,9 @@ export async function POST(req: NextRequest) {
     const deviceId = device?.id || '102023050002456';
     const deviceUserId = employee.deviceUserId || employee.employeeCode || '1';
 
-    // Normalize timestamp (e.g. 2026-09-01 09:30:00)
+    // Normalize timestamp in Indian Standard Time (IST, UTC+05:30)
     const timeFormatted = time.length === 5 ? `${time}:00` : time;
-    const timestampStr = `${date}T${timeFormatted}`;
-    const timestamp = new Date(timestampStr);
+    const timestamp = parseAppDate(`${date}T${timeFormatted}`);
 
     if (isNaN(timestamp.getTime())) {
       return NextResponse.json(

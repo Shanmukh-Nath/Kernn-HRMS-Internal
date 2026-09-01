@@ -17,6 +17,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { formatAppTime, formatAppDate } from '@/lib/timezone';
 
 export default function DailyAttendancePage() {
   const [data, setData] = useState<any>(null);
@@ -272,10 +273,10 @@ export default function DailyAttendancePage() {
                           <div className="text-[11px] text-slate-400">{emp.designation}</div>
                         </td>
                         <td className="py-4 px-6 font-mono font-bold text-slate-900">
-                          {emp.checkInTime ? format(new Date(emp.checkInTime), 'hh:mm:ss a') : '--'}
+                          {emp.checkInTime ? formatAppTime(emp.checkInTime) : '--'}
                         </td>
                         <td className="py-4 px-6 font-mono text-slate-600">
-                          {emp.checkOutTime ? format(new Date(emp.checkOutTime), 'hh:mm:ss a') : '--'}
+                          {emp.checkOutTime ? formatAppTime(emp.checkOutTime) : '--'}
                         </td>
                         <td className="py-4 px-6 text-center whitespace-nowrap">
                           {emp.status === 'ON_TIME' ? (
