@@ -49,7 +49,19 @@ function escHtml(s) {
 function fmtDate(ts) {
   if (!ts) return '—';
   try {
-    const d = new Date(ts.includes(' ') ? ts.replace(' ','T')+'Z' : ts);
+    // If string is YYYY-MM-DD HH:mm:ss, parse directly to preserve exact device local clock
+    if (typeof ts === 'string' && ts.includes(' ')) {
+      const [datePart, timePart] = ts.split(' ');
+      const [yr, mo, dy] = datePart.split('-');
+      const [hrStr, minStr, secStr] = (timePart || '00:00:00').split(':');
+      let hr = parseInt(hrStr || '0', 10);
+      const min = minStr || '00';
+      const sec = (secStr || '00').slice(0, 2);
+      const ampm = hr >= 12 ? 'pm' : 'am';
+      hr = hr % 12 || 12;
+      return `${parseInt(dy, 10)}/${parseInt(mo, 10)}/${yr}, ${hr}:${min}:${sec} ${ampm}`;
+    }
+    const d = new Date(ts);
     if (isNaN(d.getTime())) return ts;
     return d.toLocaleString('en-IN', { hour12: true });
   } catch { return ts; }
@@ -1033,10 +1045,10 @@ function initApp() {
         const today = new Date().toISOString().slice(0,10);
         punches = punches.filter(p => p.timestamp?.slice(0,10) === today);
       } else if (state.pullMode === 'RANGE') {
-        const from = new Date(state.rangeFrom).getTime();
-        const to   = new Date(state.rangeTo).getTime() + 86399999;
+        const from = new Date(state.rangeFrom + 'T00:00:00').getTime();
+        const to   = new Date(state.rangeTo + 'T23:59:59').getTime();
         punches = punches.filter(p => {
-          const t = new Date(p.timestamp?.replace(' ','T')+'Z').getTime();
+          const t = new Date(p.timestamp?.replace(' ','T')).getTime();
           return t >= from && t <= to;
         });
       }
