@@ -166,7 +166,8 @@ class DevicePuller {
 
               if (rawTime > 700000000 && uId > 0 && uId < 10000) {
                 const formattedTime = decodeTimestamp(rawTime);
-                if (!logs.some((l) => l.userId === String(uId) && l.timestamp === formattedTime)) {
+                // Only collect missing logs from September 1st, 2026 onwards
+                if (formattedTime >= '2026-09-01' && !logs.some((l) => l.userId === String(uId) && l.timestamp === formattedTime)) {
                   logs.push({
                     userId: String(uId),
                     name: users[String(uId)] || `Staff ${uId}`,

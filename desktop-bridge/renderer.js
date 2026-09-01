@@ -473,9 +473,15 @@ window.useDevice = (ip) => {
   document.querySelector('.nav-item[data-tab="tab-sync"]')?.click();
 };
 
+const MIN_COLLECT_DATE = '2026-09-01';
+
 // ─── Date Chips & Filter Engine ───────────────────────────────────────────────
 function uniqueDates(punches) {
-  return [...new Set(punches.map(p => p.timestamp?.slice(0,10)).filter(Boolean))].sort();
+  return [...new Set(
+    punches
+      .map(p => p.timestamp?.slice(0,10))
+      .filter(d => d && d >= MIN_COLLECT_DATE)
+  )].sort().reverse();
 }
 
 function buildDateChips() {
@@ -485,10 +491,18 @@ function buildDateChips() {
   const dates = uniqueDates(state.allPunches);
   if (!dates.length) return;
 
-  const mkChip = (label, value) => {
+  const countPerDate = {};
+  state.allPunches.forEach(p => {
+    const d = p.timestamp?.slice(0, 10);
+    if (d && d >= MIN_COLLECT_DATE) {
+      countPerDate[d] = (countPerDate[d] || 0) + 1;
+    }
+  });
+
+  const mkChip = (label, count, value) => {
     const c = document.createElement('button');
     c.className    = 'date-chip';
-    c.textContent  = label;
+    c.innerHTML    = `<span>${escHtml(label)}</span><span class="chip-cnt">${count}</span>`;
     c.dataset.date = value || '';
     c.addEventListener('click', () => {
       state.activeDateFilter = value || null;
@@ -497,10 +511,13 @@ function buildDateChips() {
     return c;
   };
 
-  const allChip = mkChip('All Dates', null);
+  const allChip = mkChip('All Dates', state.allPunches.length, null);
   allChip.classList.add('active');
   row.appendChild(allChip);
-  dates.forEach(d => row.appendChild(mkChip(d, d)));
+  dates.forEach(d => {
+    const cnt = countPerDate[d] || 0;
+    row.appendChild(mkChip(d, cnt, d));
+  });
 }
 
 function applyFilters() {
@@ -508,7 +525,7 @@ function applyFilters() {
     c.classList.toggle('active', (c.dataset.date || null) === (state.activeDateFilter || null));
   });
 
-  let list = [...state.allPunches];
+  let list = state.allPunches.filter(p => (p.timestamp?.slice(0,10) || '') >= MIN_COLLECT_DATE);
 
   if (state.activeDateFilter) {
     list = list.filter(p => p.timestamp?.slice(0,10) === state.activeDateFilter);
@@ -824,11 +841,10 @@ function initApp() {
     log('info', `Silent background ping ${e.target.checked ? 'activated' : 'paused'}.`);
   });
 
-  // Date range defaults
+  // Date range defaults (starts from September 1st, 2026)
   const today = new Date().toISOString().slice(0,10);
-  const week  = new Date(Date.now() - 7*86400000).toISOString().slice(0,10);
-  const rf = $('rangeFrom'); if (rf) rf.value = week;
-  const rt = $('rangeTo');   if (rt) rt.value = today;
+  const rf = $('rangeFrom'); if (rf) rf.value = '2026-09-01';
+  const rt = $('rangeTo');   if (rt) rt.value = today >= '2026-09-01' ? today : '2026-09-30';
 
   // Terminal Dock & Height Resizer
   initDockResizer();
@@ -1038,8 +1054,8 @@ function initApp() {
       const result = await puller.pullAttendanceLogs(15000);
       if (!result.success && !result.logs?.length) throw new Error(result.error || 'No records returned from device');
 
-      let punches = result.logs || [];
-      log('ok', `Extracted ${punches.length} punch records from hardware memory.`);
+      let punches = (result.logs || []).filter(p => (p.timestamp?.slice(0,10) || '') >= MIN_COLLECT_DATE);
+      log('ok', `Extracted ${punches.length} punch records from hardware memory (Sept 1, 2026 onwards).`);
 
       if (state.pullMode === 'TODAY') {
         const today = new Date().toISOString().slice(0,10);
