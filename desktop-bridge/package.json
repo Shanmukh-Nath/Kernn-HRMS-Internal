@@ -15,7 +15,7 @@
   "author": "Kernn Automations Pvt. Ltd.",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^28.2.0",
+    "electron": "^22.3.27",
     "electron-builder": "^24.9.1"
   },
   "build": {
@@ -29,6 +29,7 @@
     "mac": {
       "category": "public.app-category.business",
       "icon": "icon.png",
+      "minimumSystemVersion": "10.14.0",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
