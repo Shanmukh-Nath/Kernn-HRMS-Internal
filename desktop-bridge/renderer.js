@@ -561,15 +561,15 @@ function punchRows(punches) {
     const initial = (p.name || p.userId || 'U')[0].toUpperCase();
     return `
       <tr>
-        <td class="mono text-dim">${i+1}</td>
-        <td class="mono text-cyan" style="font-weight:700">${escHtml(p.userId)}</td>
+        <td class="mono text-dim" style="font-weight:700;padding-left:16px">${String(i + 1).padStart(2, '0')}</td>
+        <td class="mono text-cyan" style="font-weight:800">#${escHtml(p.userId)}</td>
         <td>
-          <div style="display:flex;align-items:center;gap:8px">
-            <div style="width:24px;height:24px;border-radius:6px;background:rgba(255,255,255,0.06);display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--text-1)">${initial}</div>
-            <span style="font-weight:600;color:var(--text-1)">${escHtml(p.name || 'Staff Member')}</span>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:26px;min-width:26px;height:26px;border-radius:8px;background:rgba(34,211,238,0.14);border:1px solid rgba(34,211,238,0.25);color:var(--cyan);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0">${initial}</div>
+            <span style="font-weight:600;color:var(--text-1);font-size:12px">${escHtml(p.name || 'Staff Member')}</span>
           </div>
         </td>
-        <td class="mono" style="font-size:11.5px">${escHtml(fmtDate(p.timestamp))}</td>
+        <td class="mono" style="font-size:11.5px;color:var(--text-1)">${escHtml(fmtDate(p.timestamp))}</td>
         <td>${verifyBadge(p.verifyType || p.verifyMode)}</td>
       </tr>
     `;
@@ -636,13 +636,13 @@ function renderUsersTable(users) {
 
   const rowsHtml = users.map((u) => `
     <tr>
-      <td class="mono text-cyan" style="font-weight:700">${escHtml(u.userId || u.id)}</td>
+      <td class="mono text-cyan" style="font-weight:700">#${escHtml(u.userId || u.id)}</td>
       <td>
-        <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:24px;height:24px;border-radius:6px;background:rgba(34,211,238,0.1);color:var(--cyan);display:grid;place-items:center;font-size:11px;font-weight:700">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:26px;min-width:26px;height:26px;border-radius:8px;background:rgba(34,211,238,0.14);border:1px solid rgba(34,211,238,0.25);color:var(--cyan);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0">
             ${(u.name || u.userId || 'E')[0].toUpperCase()}
           </div>
-          <span style="font-weight:600;color:var(--text-1)">${escHtml(u.name || 'Enrolled User')}</span>
+          <span style="font-weight:600;color:var(--text-1);font-size:12px">${escHtml(u.name || 'Enrolled User')}</span>
         </div>
       </td>
       <td><span class="badge ${u.privilege > 0 ? 'badge-amber' : 'badge-dim'}">${u.privilege > 0 ? 'Terminal Admin' : 'Employee'}</span></td>
