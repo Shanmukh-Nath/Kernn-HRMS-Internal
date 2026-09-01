@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
 import { decodeVerifyMode } from '@/server/secureye/native-bridge';
+import { parseAppDate } from '@/lib/timezone';
 import {
   devicesCol,
   employeesCol,
@@ -64,8 +65,8 @@ export async function POST(req: NextRequest) {
       if (!punch.userId || !punch.timestamp) continue;
 
       const uId = String(punch.userId);
-      const punchDate = new Date(punch.timestamp);
-      const timestampIso = isNaN(punchDate.getTime()) ? punch.timestamp : punchDate.toISOString();
+      const punchDate = parseAppDate(punch.timestamp);
+      const timestampIso = isNaN(punchDate.getTime()) ? new Date().toISOString() : punchDate.toISOString();
 
       // Find or create employee
       let emp = await employees.findOne({
