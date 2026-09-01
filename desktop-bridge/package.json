@@ -5,8 +5,10 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "prebuild": "node clean-build.js",
+    "prebuild:win": "node clean-build.js",
     "build:mac": "electron-builder --mac",
-    "build:win": "electron-builder --win",
+    "build:win": "node clean-build.js && electron-builder --win && node sign-installer.js",
     "build": "electron-builder -mw"
   },
   "keywords": ["biometric", "secureye", "hrms", "sync", "electron"],
@@ -19,7 +21,7 @@
   "build": {
     "appId": "com.kernn.syncbridge",
     "productName": "Kernn Sync Bridge",
-    "copyright": "Copyright © 2026 Kernn Automations Pvt. Ltd.",
+    "copyright": "Copyright © 2026 Kernn Automations Pvt. Ltd. All rights reserved.",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -34,6 +36,8 @@
     },
     "win": {
       "icon": "icon.ico",
+      "legalTrademarks": "Kernn Automations Pvt. Ltd.",
+      "publisherName": "Kernn Automations Pvt. Ltd.",
       "target": [
         {
           "target": "nsis",
@@ -50,6 +54,9 @@
       "installerIcon": "icon.ico",
       "uninstallerIcon": "icon.ico",
       "installerHeaderIcon": "icon.ico",
+      "installerSidebar": "build/installerSidebar.bmp",
+      "uninstallerSidebar": "build/uninstallerSidebar.bmp",
+      "installerHeader": "build/installerHeader.bmp",
       "createDesktopShortcut": "always",
       "createStartMenuShortcut": true,
       "shortcutName": "Kernn Sync Bridge",
