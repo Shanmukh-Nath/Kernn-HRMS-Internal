@@ -10,7 +10,7 @@
     "build": "electron-builder -mw"
   },
   "keywords": ["biometric", "secureye", "hrms", "sync", "electron"],
-  "author": "Kernn Automations",
+  "author": "Kernn Automations Pvt. Ltd.",
   "license": "MIT",
   "devDependencies": {
     "electron": "^28.2.0",
@@ -19,16 +19,44 @@
   "build": {
     "appId": "com.kernn.syncbridge",
     "productName": "Kernn Sync Bridge",
+    "copyright": "Copyright © 2026 Kernn Automations Pvt. Ltd.",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
     "mac": {
       "category": "public.app-category.business",
-      "icon": "assets/icon.png",
+      "icon": "app-icon.png",
       "target": [
         { "target": "dmg", "arch": ["x64", "arm64"] },
         { "target": "zip", "arch": ["x64", "arm64"] }
       ]
     },
     "win": {
-      "target": ["nsis", "portable"]
+      "icon": "icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "requestedExecutionLevel": "highestAvailable"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": true,
+      "allowElevation": true,
+      "installerIcon": "icon.ico",
+      "uninstallerIcon": "icon.ico",
+      "installerHeaderIcon": "icon.ico",
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "Kernn Sync Bridge",
+      "menuCategory": "Kernn Automations",
+      "runAfterFinish": true,
+      "uninstallDisplayName": "Kernn Sync Bridge - Biometric Hardware Gateway",
+      "deleteAppDataOnUninstall": false
     }
   }
 }
