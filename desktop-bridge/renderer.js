@@ -736,6 +736,33 @@ async function executePush(records, btn) {
   }
 }
 
+// ─── Known Users Resolver ──────────────────────────────────────────────────
+async function getKnownUsers() {
+  const map = {
+    '1': 'hemanth',
+    '2': 'karthik',
+    '3': 'test',
+    '6': 'shanmukh nath',
+  };
+  if (!state.session?.token) return map;
+  try {
+    const res = await fetch(`${state.cloudUrl}/api/employees?limit=200`, {
+      headers: { Authorization: `Bearer ${state.session.token}` },
+    });
+    const json = await res.json();
+    const list = json.data?.employees || json.data || [];
+    if (Array.isArray(list)) {
+      list.forEach(emp => {
+        const uId = emp.deviceUserId || emp.employeeCode?.replace(/\D/g, '') || emp.id;
+        if (uId && emp.name) {
+          map[String(uId)] = emp.name;
+        }
+      });
+    }
+  } catch (_) {}
+  return map;
+}
+
 // ─── 1-Click Quick Sync (Ping -> Pull -> Push) ────────────────────────────────
 async function executeQuickSync() {
   const btn = $('btnQuickSyncTop');
@@ -755,7 +782,8 @@ async function executeQuickSync() {
     if (!ping.reachable) throw new Error(`Device unreachable — ${ping.error}`);
     log('ok', `Terminal online (${ping.latencyMs}ms). Fetching all punch logs…`);
 
-    const result = await puller.pullAttendanceLogs(15000);
+    const knownUsers = await getKnownUsers();
+    const result = await puller.pullAttendanceLogs(15000, knownUsers);
     const punches = result.logs || [];
     log('ok', `Pulled ${punches.length} records from EEPROM.`);
 
@@ -1049,9 +1077,8 @@ function initApp() {
       if (!ping.reachable) throw new Error(`Device unreachable — ${ping.error}`);
 
       log('ok', `Device responded in ${ping.latencyMs}ms`);
-      setStatus('Reading EEPROM memory…', false);
-
-      const result = await puller.pullAttendanceLogs(15000);
+      const knownUsers = await getKnownUsers();
+      const result = await puller.pullAttendanceLogs(15000, knownUsers);
       if (!result.success && !result.logs?.length) throw new Error(result.error || 'No records returned from device');
 
       let punches = (result.logs || []).filter(p => (p.timestamp?.slice(0,10) || '') >= MIN_COLLECT_DATE);

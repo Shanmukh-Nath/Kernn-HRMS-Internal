@@ -87,23 +87,26 @@ class DevicePuller {
   /**
    * Actively PULL attendance logs from Secureye S-FB3K over pure TCP socket (macOS & Windows Native)
    */
-  async pullAttendanceLogs(timeoutMs = 8000) {
-    return new Promise((resolve, reject) => {
+  async pullAttendanceLogs(timeoutMs = 15000, knownUsers = {}) {
+    return new Promise((resolve) => {
       const socket = new net.Socket();
       let serialNumber = '';
       const logs = [];
       let logCount = 0;
+      let streamEndTimer = null;
+
       let users = {
         '1': 'hemanth',
         '2': 'karthik',
         '3': 'test',
         '6': 'shanmukh nath',
+        ...knownUsers,
       };
 
       socket.setTimeout(timeoutMs);
 
       const sendCmd = (buf) => {
-        socket.write(buf);
+        try { socket.write(buf); } catch (_) {}
       };
 
       socket.connect(this.port, this.ip, () => {
@@ -113,6 +116,51 @@ class DevicePuller {
 
       let buffer = Buffer.alloc(0);
       let state = 'HANDSHAKE_1';
+
+      const finishStream = () => {
+        if (state === 'FINISHED') return;
+        state = 'FINISHED';
+        if (streamEndTimer) clearTimeout(streamEndTimer);
+
+        // Final parse over entire accumulated buffer
+        for (let i = 0; i <= buffer.length - 12; i++) {
+          if (buffer[i + 10] === 0xff && buffer[i + 11] === 0xff) {
+            const rawTime = buffer.readUInt32LE(i);
+            const uId = buffer.readUInt32LE(i + 4);
+            const vMode = buffer.readUInt16LE(i + 8);
+
+            if (rawTime > 700000000 && uId > 0 && uId < 100000) {
+              const formattedTime = decodeTimestamp(rawTime);
+              if (formattedTime >= '2026-09-01' && !logs.some((l) => l.userId === String(uId) && l.timestamp === formattedTime)) {
+                logs.push({
+                  userId: String(uId),
+                  name: users[String(uId)] || `Staff ${uId}`,
+                  timestamp: formattedTime,
+                  verifyMode: vMode,
+                  verifyType: decodeVerifyMode(vMode),
+                });
+              }
+            }
+          }
+        }
+
+        // Sort descending so newest punches are first
+        logs.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+
+        sendCmd(Buffer.from('5aa50100670000006701', 'hex'));
+        setTimeout(() => {
+          sendCmd(Buffer.from('55aa010079190c010000000000009f01', 'hex'));
+          setTimeout(() => {
+            try { socket.destroy(); } catch (_) {}
+            resolve({
+              success: true,
+              serialNumber: serialNumber || '102023050002456',
+              count: logs.length,
+              logs,
+            });
+          }, 200);
+        }, 100);
+      };
 
       socket.on('data', (chunk) => {
         buffer = Buffer.concat([buffer, chunk]);
@@ -141,32 +189,35 @@ class DevicePuller {
           sendCmd(Buffer.from('55aa0100791907010000000000009a01', 'hex'));
         } else if (state === 'QUERY_LOG_COUNT') {
           if (buffer.length >= 12) {
-            const countMatch = buffer.indexOf(Buffer.from([0xaa, 0x55, 0x01, 0x00, 0x00, 0x00, 0x01, 0x00]));
-            if (countMatch !== -1 && buffer.length >= countMatch + 12) {
-              logCount = buffer.readUInt32LE(countMatch + 8);
+            for (let k = 0; k <= buffer.length - 12; k++) {
+              if (buffer[k] === 0xaa && buffer[k + 1] === 0x55) {
+                logCount = buffer.readUInt32LE(k + 8);
+                break;
+              }
             }
           }
-          if (!logCount) logCount = 103;
+          // Request all logs from EEPROM (up to 10,000 logs) so recent punches are never truncated
+          const requestCount = Math.max(logCount + 200, 10000);
 
           state = 'START_LOG_STREAM';
           buffer = Buffer.alloc(0);
 
-          const cmd = buildCommandPacket(0x0107, logCount, 1);
+          const cmd = buildCommandPacket(0x0107, requestCount, 1);
           socket.write(cmd);
         } else if (state === 'START_LOG_STREAM') {
           state = 'RECEIVING_STREAM';
           buffer = Buffer.alloc(0);
           sendCmd(Buffer.from('5aa50100010000000101', 'hex'));
         } else if (state === 'RECEIVING_STREAM') {
+          // Parse ongoing 12-byte blocks as stream fills
           for (let i = 0; i <= buffer.length - 12; i++) {
             if (buffer[i + 10] === 0xff && buffer[i + 11] === 0xff) {
               const rawTime = buffer.readUInt32LE(i);
               const uId = buffer.readUInt32LE(i + 4);
               const vMode = buffer.readUInt16LE(i + 8);
 
-              if (rawTime > 700000000 && uId > 0 && uId < 10000) {
+              if (rawTime > 700000000 && uId > 0 && uId < 100000) {
                 const formattedTime = decodeTimestamp(rawTime);
-                // Only collect missing logs from September 1st, 2026 onwards
                 if (formattedTime >= '2026-09-01' && !logs.some((l) => l.userId === String(uId) && l.timestamp === formattedTime)) {
                   logs.push({
                     userId: String(uId),
@@ -180,37 +231,28 @@ class DevicePuller {
             }
           }
 
-          if (logs.length >= logCount || buffer.length >= logCount * 12) {
-            state = 'FINISHED';
-            sendCmd(Buffer.from('5aa50100670000006701', 'hex'));
-            setTimeout(() => {
-              sendCmd(Buffer.from('55aa010079190c010000000000009f01', 'hex'));
-              setTimeout(() => {
-                socket.destroy();
-                resolve({
-                  success: true,
-                  serialNumber: serialNumber || '102023050002456',
-                  count: logs.length,
-                  logs,
-                });
-              }, 300);
-            }, 150);
-          }
+          // Debounce finish trigger: wait 600ms of socket silence to ensure all packets are received
+          if (streamEndTimer) clearTimeout(streamEndTimer);
+          streamEndTimer = setTimeout(finishStream, 600);
         }
       });
 
       socket.on('timeout', () => {
-        socket.destroy();
-        if (logs.length > 0) {
-          resolve({ success: true, serialNumber, count: logs.length, logs });
+        if (state === 'RECEIVING_STREAM') {
+          finishStream();
         } else {
-          resolve({ success: false, count: 0, logs: [], error: 'Socket timed out' });
+          socket.destroy();
+          resolve({ success: false, count: 0, logs: [], error: 'Connection timed out' });
         }
       });
 
       socket.on('error', (err) => {
-        socket.destroy();
-        resolve({ success: false, count: 0, logs: [], error: err.message });
+        if (state === 'RECEIVING_STREAM' && logs.length > 0) {
+          finishStream();
+        } else {
+          socket.destroy();
+          resolve({ success: false, count: 0, logs: [], error: err.message });
+        }
       });
     });
   }
