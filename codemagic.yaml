@@ -6,9 +6,6 @@ workflows:
     environment:
       node: 20
     scripts:
-      - name: Generate macOS DMG Background
-        script: |
-          node scripts/make-mac-dmg-background.js
       - name: Install Desktop Bridge Dependencies
         script: |
           cd desktop-bridge
