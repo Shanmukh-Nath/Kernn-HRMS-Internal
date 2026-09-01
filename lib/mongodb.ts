@@ -9,7 +9,7 @@ try {
 }
 
 
-const uri = process.env.MONGODB_URI || process.env.DATABASE_URL;
+const uri = process.env.MONGODB_URI || process.env.DATABASE_URL || "mongodb+srv://shanmukh733_db_user:[EMAIL_ADDRESS]/secureye_hrms?ssl=true&authSource=admin&retryWrites=true&w=majority&appName=HRMSProd";
 
 declare global {
   // eslint-disable-next-line no-var
