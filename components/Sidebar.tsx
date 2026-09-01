@@ -92,6 +92,7 @@ export function Sidebar() {
             { name: 'Salary Structures', href: '/payroll?tab=STRUCTURES', icon: Sliders },
             { name: 'Passkey Devices', href: '/settings/passkeys', icon: Fingerprint },
             { name: 'RBAC Roles Matrix', href: '/roles', icon: Shield },
+            { name: 'System Settings', href: '/settings', icon: Settings2, highlight: true },
           ],
         },
       ];
@@ -131,6 +132,7 @@ export function Sidebar() {
             { name: 'Payroll Register', href: '/payroll', icon: DollarSign },
             { name: 'Salary Structures', href: '/payroll?tab=STRUCTURES', icon: Sliders },
             { name: 'Passkey Devices', href: '/settings/passkeys', icon: Fingerprint },
+            { name: 'System Settings', href: '/settings', icon: Settings2, highlight: true },
           ],
         },
       ];

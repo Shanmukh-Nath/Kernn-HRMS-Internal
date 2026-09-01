@@ -131,6 +131,22 @@ export default function LiveMonitorPage() {
     }
   };
 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<string>('');
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([fetchRecentPunches(), fetchLivePackets()]);
+      const now = new Date();
+      setLastRefreshedAt(
+        `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')} IST`
+      );
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Live Monitor Header */}
@@ -148,7 +164,17 @@ export default function LiveMonitorPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={handleManualRefresh}
+            disabled={isRefreshing}
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-500/20 transition disabled:opacity-50 cursor-pointer"
+            title="Fetch latest punches and packets immediately"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Refreshing...' : 'Refresh Live Feed'}</span>
+          </button>
+
           <button
             onClick={() => setSoundEnabled(!soundEnabled)}
             className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border transition ${
@@ -163,7 +189,7 @@ export default function LiveMonitorPage() {
 
           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-xs font-medium text-emerald-400">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            AUTO-SYNC ACTIVE (2s)
+            AUTO-SYNC (2s)
           </div>
         </div>
       </div>
@@ -176,9 +202,20 @@ export default function LiveMonitorPage() {
               <Activity className="w-4 h-4 text-blue-600" />
               Live Punch Events ({punches.length})
             </h3>
-            <span className="text-xs text-slate-400 flex items-center gap-1">
-              <RefreshCw className="w-3 h-3 animate-spin text-slate-400" /> Auto-refreshing
-            </span>
+            <div className="flex items-center gap-2">
+              {lastRefreshedAt && (
+                <span className="text-[11px] text-slate-400 font-mono">
+                  Synced: {lastRefreshedAt}
+                </span>
+              )}
+              <button
+                onClick={handleManualRefresh}
+                className="text-xs text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-1 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 transition"
+              >
+                <RefreshCw className={`w-3 h-3 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </button>
+            </div>
           </div>
 
           {punches.length === 0 ? (

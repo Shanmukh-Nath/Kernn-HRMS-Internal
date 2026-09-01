@@ -14,28 +14,29 @@ export function getStoredShiftRule(): ShiftRuleConfig {
         ...parsed,
       };
     }
-  } catch (err) {
-    console.error('Error reading attendance rules file:', err);
-  }
+  } catch (_) {}
   return DEFAULT_SHIFT_RULE;
 }
 
 export function saveStoredShiftRule(rule: Partial<ShiftRuleConfig>): ShiftRuleConfig {
+  const merged: ShiftRuleConfig = {
+    ...DEFAULT_SHIFT_RULE,
+    ...rule,
+  };
+
   try {
     const dataDir = path.dirname(CONFIG_PATH);
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
     }
-
-    const merged: ShiftRuleConfig = {
-      ...getStoredShiftRule(),
-      ...rule,
-    };
-
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf-8');
-    return merged;
-  } catch (err) {
-    console.error('Error saving attendance rules file:', err);
-    throw err;
+  } catch (err: any) {
+    // Gracefully ignore EROFS on read-only serverless platforms like Vercel
+    if (err?.code !== 'EROFS') {
+      console.warn('Filesystem write notice (using MongoDB storage):', err.message);
+    }
   }
+
+  return merged;
 }
+

@@ -111,11 +111,12 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({
       success: true,
       data: dataToSave,
-      message: 'Shift timing buffers and overtime parameters successfully saved to database.',
+      message: 'Shift timing buffers and attendance rules successfully saved to database.',
     });
   } catch (err: any) {
+    console.error('Attendance rules save error:', err);
     return NextResponse.json(
-      { success: false, error: { code: 'SAVE_FAILED', message: err.message } },
+      { success: false, error: { code: 'SAVE_FAILED', message: err.message || 'Failed to save rules.' } },
       { status: 500 }
     );
   }
