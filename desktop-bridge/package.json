@@ -29,12 +29,10 @@
     "mac": {
       "category": "public.app-category.business",
       "icon": "icon.png",
-      "minimumSystemVersion": "10.14.0",
-      "hardenedRuntime": true,
+      "minimumSystemVersion": "10.13.0",
+      "hardenedRuntime": false,
       "gatekeeperAssess": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
-      "darkModeSupport": true,
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
       "target": [
         { "target": "dmg", "arch": ["x64", "arm64"] },
         { "target": "zip", "arch": ["x64", "arm64"] }
