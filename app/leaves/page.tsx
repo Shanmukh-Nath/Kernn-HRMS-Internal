@@ -325,6 +325,12 @@ function LeavesContent() {
 
   useEffect(() => {
     fetchData();
+
+    const handleHrmsRefresh = () => {
+      fetchData();
+    };
+    window.addEventListener('hrms-refresh', handleHrmsRefresh);
+    return () => window.removeEventListener('hrms-refresh', handleHrmsRefresh);
   }, []);
 
   const selectedType = leaveTypes.find((t) => t.id === applyForm.leaveTypeId);

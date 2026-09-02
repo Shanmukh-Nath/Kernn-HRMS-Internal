@@ -139,6 +139,13 @@ export default function DailyAttendancePage() {
   useEffect(() => {
     fetchCurrentUser();
     fetchDailyData();
+
+    const handleHrmsRefresh = () => {
+      fetchDailyData();
+      fetchMyMonthlyLedger(selectedMonth, selectedYear);
+    };
+    window.addEventListener('hrms-refresh', handleHrmsRefresh);
+    return () => window.removeEventListener('hrms-refresh', handleHrmsRefresh);
   }, []);
 
   useEffect(() => {

@@ -104,6 +104,12 @@ export default function ApprovalsPage() {
 
   useEffect(() => {
     fetchAllApprovals();
+
+    const handleHrmsRefresh = () => {
+      fetchAllApprovals();
+    };
+    window.addEventListener('hrms-refresh', handleHrmsRefresh);
+    return () => window.removeEventListener('hrms-refresh', handleHrmsRefresh);
   }, []);
 
   const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({

@@ -187,6 +187,16 @@ export async function compOffClaimsCol(): Promise<Collection<any>> {
   return db.collection('comp_off_claims');
 }
 
+export async function notificationsCol(): Promise<Collection<any>> {
+  const db = await getMongoDb();
+  return db.collection('notifications');
+}
+
+export async function notificationReadsCol(): Promise<Collection<any>> {
+  const db = await getMongoDb();
+  return db.collection('notification_reads');
+}
+
 // Index Management
 export async function ensureMongoIndices(): Promise<void> {
   try {
