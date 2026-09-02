@@ -9,10 +9,10 @@ import {
   Clock,
   Palmtree,
   Search,
-  Filter,
   RefreshCw,
   Sparkles,
   ChevronRight,
+  ChevronLeft,
   ShieldCheck,
   AlertCircle,
   CheckCircle2,
@@ -20,7 +20,6 @@ import {
   FileSpreadsheet,
   Download,
   ArrowRight,
-  HelpCircle,
   Plus,
   Eye,
   Check,
@@ -31,20 +30,39 @@ import {
 import { format } from 'date-fns';
 import { formatAppTime12, formatAppDate } from '@/lib/timezone';
 
+const MONTH_NAMES = [
+  { value: 1, label: 'January' },
+  { value: 2, label: 'February' },
+  { value: 3, label: 'March' },
+  { value: 4, label: 'April' },
+  { value: 5, label: 'May' },
+  { value: 6, label: 'June' },
+  { value: 7, label: 'July' },
+  { value: 8, label: 'August' },
+  { value: 9, label: 'September' },
+  { value: 10, label: 'October' },
+  { value: 11, label: 'November' },
+  { value: 12, label: 'December' },
+];
+
+const AVAILABLE_YEARS = [2026, 2027, 2028];
+
 export default function DailyAttendancePage() {
   const [currentUser, setCurrentUser] = useState<any | null>(null);
+  const [userLoaded, setUserLoaded] = useState(false);
   const [data, setData] = useState<any>(null);
   const [ledgerData, setLedgerData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [ledgerLoading, setLedgerLoading] = useState(false);
+
+  // Month & Year Picker State (Starting from September 2026)
+  const [selectedMonth, setSelectedMonth] = useState(9); // September
+  const [selectedYear, setSelectedYear] = useState(2026);
+
+  // Admin View States
   const [search, setSearch] = useState('');
   const [deptFilter, setDeptFilter] = useState('ALL');
   const [activeListTab, setActiveListTab] = useState<'PRESENT' | 'ON_LEAVE' | 'ABSENT'>('PRESENT');
-  const [employeeViewTab, setEmployeeViewTab] = useState<'TODAY' | 'HISTORY'>('TODAY');
-
-  // Ledger Filter States
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
 
   // Time Correction Modal State
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
@@ -82,7 +100,10 @@ export default function DailyAttendancePage() {
       if (json.success && json.data?.user) {
         setCurrentUser(json.data.user);
       }
-    } catch {}
+    } catch {
+    } finally {
+      setUserLoaded(true);
+    }
   };
 
   const fetchDailyData = async () => {
@@ -100,13 +121,10 @@ export default function DailyAttendancePage() {
     }
   };
 
-  const fetchMyLedger = async () => {
+  const fetchMyMonthlyLedger = async (m: number, y: number) => {
     setLedgerLoading(true);
     try {
-      const q = new URLSearchParams();
-      if (startDate) q.set('startDate', startDate);
-      if (endDate) q.set('endDate', endDate);
-      const res = await fetch(`/api/attendance/my-ledger?${q.toString()}`);
+      const res = await fetch(`/api/attendance/my-ledger?month=${m}&year=${y}`);
       const json = await res.json();
       if (json.success) {
         setLedgerData(json.data);
@@ -121,8 +139,29 @@ export default function DailyAttendancePage() {
   useEffect(() => {
     fetchCurrentUser();
     fetchDailyData();
-    fetchMyLedger();
   }, []);
+
+  useEffect(() => {
+    fetchMyMonthlyLedger(selectedMonth, selectedYear);
+  }, [selectedMonth, selectedYear]);
+
+  const handlePrevMonth = () => {
+    if (selectedMonth === 1) {
+      setSelectedMonth(12);
+      setSelectedYear((y) => Math.max(2026, y - 1));
+    } else {
+      setSelectedMonth((m) => m - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (selectedMonth === 12) {
+      setSelectedMonth(1);
+      setSelectedYear((y) => y + 1);
+    } else {
+      setSelectedMonth((m) => m + 1);
+    }
+  };
 
   const handleCorrectionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,7 +177,7 @@ export default function DailyAttendancePage() {
         showToast('Time adjustment submitted to manager for approval!', 'success');
         setShowCorrectionModal(false);
         fetchDailyData();
-        fetchMyLedger();
+        fetchMyMonthlyLedger(selectedMonth, selectedYear);
       } else {
         showToast(json.error?.message || 'Submission failed', 'error');
       }
@@ -177,6 +216,15 @@ export default function DailyAttendancePage() {
   const todayFormatted = format(new Date(), 'EEEE, dd MMMM yyyy');
   const myTodayRecord = data?.todayCheckIns?.[0] || null;
 
+  if (!userLoaded) {
+    return (
+      <div className="flex items-center justify-center p-24 text-slate-400 text-xs">
+        <RefreshCw className="w-6 h-6 animate-spin text-[#a92427] mr-2" />
+        <span>Loading attendance portal...</span>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12 animate-fadeIn relative">
       {/* Toast Notification */}
@@ -206,30 +254,72 @@ export default function DailyAttendancePage() {
       )}
 
       {/* ========================================================================= */}
-      {/* 1. EMPLOYEE PERSONAL ATTENDANCE VIEW */}
+      {/* 1. EMPLOYEE PERSONAL MONTHLY ATTENDANCE SUITE */}
       {/* ========================================================================= */}
       {isEmployee ? (
         <div className="space-y-6">
-          {/* Header Banner */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white p-6 sm:p-8 rounded-3xl border border-slate-700/60 shadow-xl relative overflow-hidden">
-            <div className="absolute -top-12 -right-12 w-64 h-64 bg-[#a92427]/20 rounded-full blur-3xl pointer-events-none" />
-            <div className="relative z-10 space-y-2">
+          {/* Top Header with Month & Year Picker */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-slate-950 via-slate-900 to-slate-950 text-white p-6 sm:p-8 rounded-3xl border border-slate-800 shadow-xl relative overflow-hidden">
+            <div className="absolute -top-12 -right-12 w-72 h-72 bg-[#a92427]/25 rounded-full blur-3xl pointer-events-none" />
+            
+            <div className="relative z-10 space-y-1.5">
               <div className="flex items-center gap-2">
                 <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  Personal Duty Console
+                  Personal Attendance Suite
                 </span>
-                <span className="text-xs text-slate-400 font-mono">{todayFormatted}</span>
+                <span className="text-xs text-slate-400 font-mono">Today: {todayFormatted}</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
-                My Attendance & Duty Hub
+                My Attendance & Monthly Reports
               </h2>
               <p className="text-xs sm:text-sm text-slate-300 max-w-xl">
-                View your real-time terminal scans, manager regularizations, and personal attendance history reports.
+                Select any month to inspect date-wise punctuality, verified punch times, and manager regularizations.
               </p>
             </div>
 
-            <div className="relative z-10 flex items-center gap-3">
+            {/* Year & Month Picker Controls */}
+            <div className="relative z-10 flex flex-wrap items-center gap-2 bg-slate-900/90 p-2 rounded-2xl border border-slate-700 shadow-lg">
+              <button
+                onClick={handlePrevMonth}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
+                title="Previous Month"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-[#a92427]"
+              >
+                {MONTH_NAMES.map((m) => (
+                  <option key={m.value} value={m.value}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-[#a92427]"
+              >
+                {AVAILABLE_YEARS.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                onClick={handleNextMonth}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
+                title="Next Month"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+
               <button
                 onClick={() => {
                   setCorrectionForm({
@@ -241,296 +331,186 @@ export default function DailyAttendancePage() {
                   });
                   setShowCorrectionModal(true);
                 }}
-                className="px-5 py-2.5 rounded-2xl bg-[#a92427] hover:bg-[#8e1d20] text-white text-xs font-bold shadow-lg shadow-[#a92427]/30 transition flex items-center gap-2"
+                className="ml-2 px-4 py-2 rounded-xl bg-[#a92427] hover:bg-[#8e1d20] text-white text-xs font-bold shadow-md transition flex items-center gap-1.5"
               >
-                <Clock className="w-4 h-4 text-emerald-300" />
-                <span>Request Time Adjustment</span>
-              </button>
-
-              <button
-                onClick={() => { fetchDailyData(); fetchMyLedger(); }}
-                disabled={loading}
-                className="p-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white border border-white/10 text-xs font-bold transition"
-                title="Refresh Status"
-              >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                <Plus className="w-3.5 h-3.5" />
+                <span>Request Adjustment</span>
               </button>
             </div>
           </div>
 
-          {/* 4 Personal Metric Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Today&apos;s First In</span>
-              <div className="text-2xl font-black font-mono text-slate-900 flex items-center gap-2">
-                {myTodayRecord?.checkInTime ? formatAppTime12(myTodayRecord.checkInTime) : '--:--'}
+          {/* Today's Live Duty Widget */}
+          <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-700">
+                <Clock className="w-6 h-6 text-[#a92427]" />
               </div>
               <div>
-                {myTodayRecord?.status === 'REGULARIZED' && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                    Regularized (Approved)
-                  </span>
-                )}
-                {myTodayRecord?.status === 'ON_TIME' && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    On Time
-                  </span>
-                )}
-                {myTodayRecord?.status === 'LATE' && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
-                    Late Arrival
-                  </span>
-                )}
-                {!myTodayRecord && (
-                  <span className="text-[11px] text-slate-400">Awaiting scan</span>
-                )}
-              </div>
-            </div>
-
-            <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Today&apos;s Last Out</span>
-              <div className="text-2xl font-black font-mono text-slate-900">
-                {myTodayRecord?.checkOutTime ? formatAppTime12(myTodayRecord.checkOutTime) : '--:--'}
-              </div>
-              <div>
-                {myTodayRecord?.checkOutTime ? (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
-                    Checked Out
-                  </span>
-                ) : myTodayRecord?.checkInTime ? (
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    Active on Duty
-                  </span>
-                ) : (
-                  <span className="text-[11px] text-slate-400">No punch yet</span>
-                )}
-              </div>
-            </div>
-
-            <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Assigned Shift</span>
-              <div className="text-xl font-bold text-slate-900">
-                {ledgerData?.employee?.workShift || 'Day Shift (8h)'}
-              </div>
-              <div className="text-[11px] text-slate-500">
-                Standard: 09:30 AM – 06:30 PM
-              </div>
-            </div>
-
-            <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Month Attendance</span>
-              <div className="text-2xl font-black font-mono text-emerald-700">
-                {ledgerData?.metrics?.presentCount || 0} <span className="text-xs font-sans text-slate-400 font-normal">days present</span>
-              </div>
-              <div className="text-[11px] text-slate-500 flex items-center gap-2">
-                <span>On-time: <strong>{ledgerData?.metrics?.onTimeCount || 0}</strong></span>
-                <span>•</span>
-                <span>Reg: <strong>{ledgerData?.metrics?.regularizedCount || 0}</strong></span>
-              </div>
-            </div>
-          </div>
-
-          {/* Sub-tab Switcher: Today's Verified Log vs Complete Historical Reports */}
-          <div className="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl w-fit border border-slate-200">
-            <button
-              onClick={() => setEmployeeViewTab('TODAY')}
-              className={`px-5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-                employeeViewTab === 'TODAY'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Radio className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Today&apos;s Verified Presence</span>
-            </button>
-
-            <button
-              onClick={() => setEmployeeViewTab('HISTORY')}
-              className={`px-5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-                employeeViewTab === 'HISTORY'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-blue-600" />
-              <span>My Attendance Reports & Ledger</span>
-              <span className="px-2 py-0.5 rounded-md text-[10px] font-mono bg-slate-200 text-slate-700">
-                {ledgerData?.ledger?.length || 0}
-              </span>
-            </button>
-          </div>
-
-          {/* TAB 1: TODAY'S PRESENCE TIMELINE */}
-          {employeeViewTab === 'TODAY' && (
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-6">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                <div>
-                  <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
-                    <UserCheck className="w-5 h-5 text-emerald-600" />
-                    <span>Verified Biometric Activity (Today)</span>
-                  </h3>
-                  <p className="text-xs text-slate-400">Recorded punches and managerial adjustments for current date</p>
-                </div>
-
-                <div className="text-xs font-mono font-bold text-slate-600 px-3 py-1.5 bg-slate-50 border rounded-xl">
-                  Terminal IP: 192.168.1.201
-                </div>
-              </div>
-
-              {myTodayRecord ? (
-                <div className="space-y-4">
-                  <div className="p-6 rounded-2xl bg-slate-50 border border-slate-200 grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div>
-                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                        First Morning Check-In
-                      </span>
-                      <div className="text-2xl font-black font-mono text-slate-900">
-                        {myTodayRecord.checkInTime ? formatAppTime12(myTodayRecord.checkInTime) : '--'}
-                      </div>
-                      <div className="text-[11px] text-slate-500 mt-1">
-                        Device: {myTodayRecord.deviceName || 'Secureye Terminal'}
-                      </div>
-                    </div>
-
-                    <div>
-                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                        Latest Evening Check-Out
-                      </span>
-                      <div className="text-2xl font-black font-mono text-slate-900">
-                        {myTodayRecord.checkOutTime ? formatAppTime12(myTodayRecord.checkOutTime) : '--'}
-                      </div>
-                      <div className="text-[11px] text-slate-500 mt-1">
-                        {myTodayRecord.checkOutTime ? 'Shift completed' : 'On-going shift (active on duty)'}
-                      </div>
-                    </div>
-
-                    <div>
-                      <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                        Punctuality Status
-                      </span>
-                      <div>
-                        {myTodayRecord.status === 'REGULARIZED' && (
-                          <span className="px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 inline-block">
-                            Regularized (Manager Approved)
-                          </span>
-                        )}
-                        {myTodayRecord.status === 'ON_TIME' && (
-                          <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 inline-block">
-                            On Time Arrival
-                          </span>
-                        )}
-                        {myTodayRecord.status === 'LATE' && (
-                          <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 inline-block">
-                            Late Arrival
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-slate-400 mt-1.5">
-                        {myTodayRecord.status === 'REGULARIZED' ? 'Correction verified & applied by reporting supervisor.' : 'Standard hardware log verified.'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-12 text-center text-slate-400 text-xs space-y-2">
-                  <Clock className="w-10 h-10 text-slate-300 mx-auto" />
-                  <p className="font-bold text-slate-700 text-sm">No Biometric Punch Recorded Today</p>
-                  <p className="text-slate-400 max-w-sm mx-auto">
-                    Please scan your fingerprint or RFID card on the Secureye terminal. If the hardware was offline, use the button above to request a time adjustment.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB 2: PERSONAL ATTENDANCE REPORTS & HISTORICAL LEDGER */}
-          {employeeViewTab === 'HISTORY' && (
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-                <div>
-                  <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
-                    <FileSpreadsheet className="w-5 h-5 text-blue-600" />
-                    <span>My Attendance Ledger & Audit Trail</span>
-                  </h3>
-                  <p className="text-xs text-slate-400">Complete historical record including raw scans, adjustments, and shift hours</p>
-                </div>
-
                 <div className="flex items-center gap-2">
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-mono"
-                    title="From Date"
-                  />
-                  <span className="text-slate-400 text-xs">to</span>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-mono"
-                    title="To Date"
-                  />
-                  <button
-                    onClick={fetchMyLedger}
-                    className="px-3 py-1.5 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition"
-                  >
-                    Filter
-                  </button>
+                  <span className="font-bold text-sm text-slate-900">Today&apos;s Status ({todayFormatted})</span>
+                  {myTodayRecord?.status === 'REGULARIZED' && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                      Regularized (Approved)
+                    </span>
+                  )}
+                  {myTodayRecord?.status === 'ON_TIME' && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      On Time
+                    </span>
+                  )}
+                  {myTodayRecord?.status === 'LATE' && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                      Late Arrival
+                    </span>
+                  )}
+                  {!myTodayRecord && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
+                      No Scan Recorded Yet
+                    </span>
+                  )}
                 </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  First In: <strong className="text-slate-800 font-mono">{myTodayRecord?.checkInTime ? formatAppTime12(myTodayRecord.checkInTime) : '--:--'}</strong> •
+                  Last Out: <strong className="text-slate-800 font-mono">{myTodayRecord?.checkOutTime ? formatAppTime12(myTodayRecord.checkOutTime) : 'Active on Duty'}</strong> •
+                  Shift: <strong>Day Shift (09:30 AM – 06:30 PM)</strong>
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                setCorrectionForm({
+                  date: format(new Date(), 'yyyy-MM-dd'),
+                  adjustmentType: 'CHECK_IN',
+                  requestedCheckIn: '09:00',
+                  requestedCheckOut: '18:00',
+                  reason: '',
+                });
+                setShowCorrectionModal(true);
+              }}
+              className="px-4 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs border border-blue-200 transition self-start sm:self-auto"
+            >
+              Time Incorrect? Adjust Today
+            </button>
+          </div>
+
+          {/* Personal Monthly Attendance Statistics (NO Headcount!) */}
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Days in Month</span>
+              <div className="text-2xl font-black font-mono text-slate-900">
+                {ledgerData?.ledger?.length || 0} <span className="text-xs font-sans text-slate-400 font-normal">days</span>
+              </div>
+              <div className="text-[10px] text-slate-500">
+                {MONTH_NAMES.find((m) => m.value === selectedMonth)?.label} {selectedYear}
+              </div>
+            </div>
+
+            <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
+              <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">Days Present</span>
+              <div className="text-2xl font-black font-mono text-emerald-700">
+                {ledgerData?.metrics?.presentCount || 0} <span className="text-xs font-sans text-slate-400 font-normal">days</span>
+              </div>
+              <div className="text-[10px] text-emerald-600 font-medium">
+                {ledgerData?.metrics?.onTimeCount || 0} on-time arrivals
+              </div>
+            </div>
+
+            <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
+              <span className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">Regularized</span>
+              <div className="text-2xl font-black font-mono text-blue-700">
+                {ledgerData?.metrics?.regularizedCount || 0} <span className="text-xs font-sans text-slate-400 font-normal">days</span>
+              </div>
+              <div className="text-[10px] text-blue-600 font-medium">
+                Manager verified punches
+              </div>
+            </div>
+
+            <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
+              <span className="text-[11px] font-bold text-purple-600 uppercase tracking-wider">Approved Leaves</span>
+              <div className="text-2xl font-black font-mono text-purple-700">
+                {ledgerData?.metrics?.leavesCount || 0} <span className="text-xs font-sans text-slate-400 font-normal">days</span>
+              </div>
+              <div className="text-[10px] text-purple-600 font-medium">
+                Authorized time off
+              </div>
+            </div>
+
+            <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs space-y-1">
+              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Total Work Hours</span>
+              <div className="text-2xl font-black font-mono text-slate-900">
+                {ledgerData?.metrics?.totalWorkHours || 0}h
+              </div>
+              <div className="text-[10px] text-slate-500">
+                Avg: {ledgerData?.metrics?.averageDailyHours || 0}h/day
+              </div>
+            </div>
+          </div>
+
+          {/* Date-wise Detailed Attendance Table */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="font-bold text-base text-slate-900 flex items-center gap-2">
+                  <FileSpreadsheet className="w-5 h-5 text-[#a92427]" />
+                  <span>Date-wise Attendance Ledger — {MONTH_NAMES.find((m) => m.value === selectedMonth)?.label} {selectedYear}</span>
+                </h3>
+                <p className="text-xs text-slate-400">Complete day-by-day record of punches, regularizations, and shift duration</p>
               </div>
 
-              {/* Summary Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Days Recorded</span>
-                  <div className="text-xl font-black font-mono text-slate-900 mt-1">{ledgerData?.metrics?.totalDaysRecorded || 0}</div>
-                </div>
-                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-center">
-                  <span className="text-[10px] font-bold text-emerald-600 uppercase">Days Present</span>
-                  <div className="text-xl font-black font-mono text-emerald-800 mt-1">{ledgerData?.metrics?.presentCount || 0}</div>
-                </div>
-                <div className="p-4 rounded-2xl bg-blue-50 border border-blue-200 text-center">
-                  <span className="text-[10px] font-bold text-blue-600 uppercase">Regularized</span>
-                  <div className="text-xl font-black font-mono text-blue-800 mt-1">{ledgerData?.metrics?.regularizedCount || 0}</div>
-                </div>
-                <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-center">
-                  <span className="text-[10px] font-bold text-amber-700 uppercase">Late Arrivals</span>
-                  <div className="text-xl font-black font-mono text-amber-800 mt-1">{ledgerData?.metrics?.lateCount || 0}</div>
-                </div>
-                <div className="p-4 rounded-2xl bg-purple-50 border border-purple-200 text-center">
-                  <span className="text-[10px] font-bold text-purple-700 uppercase">Total Work Hours</span>
-                  <div className="text-xl font-black font-mono text-purple-900 mt-1">{ledgerData?.metrics?.totalWorkHours || 0}h</div>
-                </div>
+              <div className="text-xs text-slate-500 font-mono">
+                Employee: <strong>{currentUser.name}</strong> ({currentUser.employeeCode || 'EMP-005'})
               </div>
+            </div>
 
-              {/* Table */}
-              {ledgerLoading ? (
-                <div className="p-12 text-center text-slate-400 text-xs">Loading personal attendance ledger...</div>
-              ) : ledgerData?.ledger?.length === 0 ? (
-                <div className="p-12 text-center text-slate-400 text-xs">No attendance entries recorded for this period.</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="bg-slate-50/80 border-b border-slate-200 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
-                        <th className="py-3.5 px-4 font-mono">Date</th>
-                        <th className="py-3.5 px-4">Daily Status</th>
-                        <th className="py-3.5 px-4 font-mono">Effective Check-In</th>
-                        <th className="py-3.5 px-4 font-mono">Effective Check-Out</th>
-                        <th className="py-3.5 px-4 font-mono">Raw Scan vs Adjusted</th>
-                        <th className="py-3.5 px-4 font-mono">Duration</th>
-                        <th className="py-3.5 px-4">Audit Note / Reviewer</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {ledgerData?.ledger?.map((row: any) => (
-                        <tr key={row.date} className="hover:bg-slate-50/80 transition">
+            {ledgerLoading ? (
+              <div className="p-16 text-center text-slate-400 text-xs">
+                <RefreshCw className="w-6 h-6 animate-spin text-[#a92427] mx-auto mb-2" />
+                <span>Loading monthly attendance ledger...</span>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-200 text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+                      <th className="py-3.5 px-4 font-mono">Date</th>
+                      <th className="py-3.5 px-4">Day</th>
+                      <th className="py-3.5 px-4">Shift</th>
+                      <th className="py-3.5 px-4 font-mono">First Check-In</th>
+                      <th className="py-3.5 px-4 font-mono">Latest Check-Out</th>
+                      <th className="py-3.5 px-4 font-mono">Work Hours</th>
+                      <th className="py-3.5 px-4 text-center">Status</th>
+                      <th className="py-3.5 px-4">Raw vs Adjusted</th>
+                      <th className="py-3.5 px-4 text-right">Actions / Audit</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {ledgerData?.ledger?.map((row: any) => {
+                      const dObj = new Date(row.date + 'T00:00:00');
+                      const dayName = format(dObj, 'EEEE');
+                      const isSunday = dObj.getDay() === 0;
+
+                      return (
+                        <tr key={row.date} className={`hover:bg-slate-50/80 transition ${isSunday ? 'bg-slate-50/40' : ''}`}>
                           <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
-                            {format(new Date(row.date), 'dd MMM yyyy')}
+                            {format(dObj, 'dd MMM yyyy')}
                           </td>
-                          <td className="py-3.5 px-4">
+                          <td className="py-3.5 px-4 font-medium text-slate-600">
+                            {dayName}
+                          </td>
+                          <td className="py-3.5 px-4 text-slate-500 text-[11px]">
+                            {isSunday ? 'Off' : '09:30 - 18:30'}
+                          </td>
+                          <td className="py-3.5 px-4 font-mono font-bold text-slate-900">
+                            {row.firstIn ? formatAppTime12(row.firstIn) : '--'}
+                          </td>
+                          <td className="py-3.5 px-4 font-mono text-slate-700">
+                            {row.lastOut ? formatAppTime12(row.lastOut) : (row.firstIn ? 'Active on Duty' : '--')}
+                          </td>
+                          <td className="py-3.5 px-4 font-mono text-slate-700 font-semibold">
+                            {row.workingHours ? `${row.workingHours} hrs` : '--'}
+                          </td>
+                          <td className="py-3.5 px-4 text-center whitespace-nowrap">
                             {row.status === 'REGULARIZED' && (
                               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
                                 Regularized (Approved)
@@ -551,63 +531,72 @@ export default function DailyAttendancePage() {
                                 {row.statusLabel}
                               </span>
                             )}
-                            {row.status === 'ABSENT' && (
-                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                                Absent / Missed
+                            {row.status === 'WEEKLY_OFF' && (
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">
+                                Weekly Off (Sunday)
                               </span>
                             )}
-                          </td>
-                          <td className="py-3.5 px-4 font-mono font-bold text-slate-800">
-                            {row.firstIn ? formatAppTime12(row.firstIn) : '--'}
-                          </td>
-                          <td className="py-3.5 px-4 font-mono text-slate-600">
-                            {row.lastOut ? formatAppTime12(row.lastOut) : '--'}
+                            {row.status === 'FUTURE' && (
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-400 border border-slate-100">
+                                Upcoming
+                              </span>
+                            )}
+                            {row.status === 'ABSENT' && (
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                Missed Punch
+                              </span>
+                            )}
                           </td>
                           <td className="py-3.5 px-4 text-[11px] text-slate-500">
                             {row.isRegularized ? (
                               <div>
-                                <span className="text-emerald-700 font-semibold font-mono">
+                                <span className="text-emerald-700 font-bold font-mono">
                                   Adj: {row.regularizedIn || '--'} - {row.regularizedOut || '--'}
                                 </span>
                                 <div className="text-[10px] text-slate-400 font-mono">
                                   Raw: {row.recordedIn ? formatAppTime12(row.recordedIn) : 'None'}
                                 </div>
                               </div>
+                            ) : row.recordedIn ? (
+                              <span className="text-slate-400 font-mono">Hardware Scan</span>
                             ) : (
-                              <span className="text-slate-400 font-mono">Direct Machine Scan</span>
+                              <span className="text-slate-300">--</span>
                             )}
                           </td>
-                          <td className="py-3.5 px-4 font-mono text-slate-700">
-                            {row.workingHours ? `${row.workingHours} hrs` : '--'}
-                          </td>
-                          <td className="py-3.5 px-4 text-[11px] text-slate-600 max-w-xs">
-                            {row.regularization?.reason && (
-                              <div>
-                                <div className="truncate font-medium text-slate-800" title={row.regularization.reason}>
-                                  Reason: {row.regularization.reason}
-                                </div>
-                                {row.regularization.reviewedBy && (
-                                  <div className="text-[10px] text-slate-400">
-                                    Approved by {row.regularization.reviewedBy}
-                                  </div>
-                                )}
+                          <td className="py-3.5 px-4 text-right">
+                            {row.isRegularized && row.regularization?.reviewedBy ? (
+                              <div className="text-[10px] text-slate-500">
+                                <span className="font-semibold text-slate-700">{row.regularization.reviewedBy}</span>
+                                <div className="text-[9px] text-slate-400">Approved</div>
                               </div>
-                            )}
-                            {row.leave?.reason && (
-                              <div className="text-purple-700 italic">Leave: {row.leave.reason}</div>
-                            )}
-                            {!row.regularization && !row.leave && (
-                              <span className="text-slate-400">--</span>
+                            ) : (row.status === 'ABSENT' || row.status === 'LATE') ? (
+                              <button
+                                onClick={() => {
+                                  setCorrectionForm({
+                                    date: row.date,
+                                    adjustmentType: 'CHECK_IN',
+                                    requestedCheckIn: '09:00',
+                                    requestedCheckOut: '18:00',
+                                    reason: '',
+                                  });
+                                  setShowCorrectionModal(true);
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-[10px] border border-blue-200 transition"
+                              >
+                                Fix Punch
+                              </button>
+                            ) : (
+                              <span className="text-slate-300">--</span>
                             )}
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         /* ========================================================================= */

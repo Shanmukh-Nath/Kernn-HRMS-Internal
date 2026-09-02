@@ -40,6 +40,8 @@ export async function GET(req: NextRequest) {
 
     const startDateParam = searchParams.get('startDate');
     const endDateParam = searchParams.get('endDate');
+    const monthParam = searchParams.get('month'); // 1 - 12
+    const yearParam = searchParams.get('year'); // e.g. 2026
 
     const empCol = await employeesCol();
     const attCol = await attendanceEventsCol();
@@ -97,22 +99,29 @@ export async function GET(req: NextRequest) {
       eventsByDate.get(istDate)!.push(ev);
     }
 
-    // Determine date range (default to current month or past 30 days)
-    const allDatesSet = new Set<string>([
-      ...Array.from(eventsByDate.keys()),
-      ...Array.from(regByDate.keys()),
-    ]);
+    // Determine dates list to return
+    let sortedDates: string[] = [];
+    const todayIst = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
-    // Add current date
-    const nowIst = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-    allDatesSet.add(nowIst);
-
-    let sortedDates = Array.from(allDatesSet).sort((a, b) => b.localeCompare(a));
-    if (startDateParam) {
-      sortedDates = sortedDates.filter((d) => d >= startDateParam);
-    }
-    if (endDateParam) {
-      sortedDates = sortedDates.filter((d) => d <= endDateParam);
+    if (monthParam && yearParam) {
+      const m = parseInt(monthParam, 10);
+      const y = parseInt(yearParam, 10);
+      const daysInMonth = new Date(y, m, 0).getDate();
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dStr = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        sortedDates.push(dStr);
+      }
+      // Sort descending (latest date first) or ascending
+      sortedDates.sort((a, b) => b.localeCompare(a));
+    } else {
+      const allDatesSet = new Set<string>([
+        ...Array.from(eventsByDate.keys()),
+        ...Array.from(regByDate.keys()),
+        todayIst,
+      ]);
+      sortedDates = Array.from(allDatesSet).sort((a, b) => b.localeCompare(a));
+      if (startDateParam) sortedDates = sortedDates.filter((d) => d >= startDateParam);
+      if (endDateParam) sortedDates = sortedDates.filter((d) => d <= endDateParam);
     }
 
     const ledger: any[] = [];
@@ -186,11 +195,25 @@ export async function GET(req: NextRequest) {
         }
       }
 
+      const dateObj = new Date(dateStr + 'T00:00:00');
+      const isSunday = dateObj.getDay() === 0;
+      const isFuture = dateStr > todayIst;
+
       if (!effectiveIn && !effectiveOut) {
+        let status = 'ABSENT';
+        let statusLabel = 'No Punch Detected';
+        if (isFuture) {
+          status = 'FUTURE';
+          statusLabel = 'Upcoming Working Day';
+        } else if (isSunday) {
+          status = 'WEEKLY_OFF';
+          statusLabel = 'Weekly Off (Sunday)';
+        }
+
         ledger.push({
           date: dateStr,
-          status: 'ABSENT',
-          statusLabel: 'No Punch Detected',
+          status,
+          statusLabel,
           firstIn: null,
           lastOut: null,
           recordedIn: null,
