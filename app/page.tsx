@@ -495,16 +495,33 @@ export default function DashboardPage() {
               </div>
               <div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Today&apos;s Biometric Punch</span>
-                <div className="text-lg font-black text-slate-900">
+                <div className="text-lg font-black text-slate-900 flex items-center gap-2">
                   {myCheckIn ? (
-                    <span className="text-emerald-700">
-                      Checked in at {format(new Date(myCheckIn.checkInTime), 'hh:mm a')} ({myCheckIn.status === 'ON_TIME' ? 'On Time' : 'Late'})
-                    </span>
+                    <>
+                      <span className="text-emerald-700 font-mono">
+                        Checked in at {format(new Date(myCheckIn.checkInTime), 'hh:mm a')}
+                      </span>
+                      {myCheckIn.status === 'REGULARIZED' && (
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                          Regularized (Approved)
+                        </span>
+                      )}
+                      {myCheckIn.status === 'ON_TIME' && (
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          On Time
+                        </span>
+                      )}
+                      {myCheckIn.status === 'LATE' && (
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                          Late
+                        </span>
+                      )}
+                    </>
                   ) : (
                     <span className="text-slate-500">No Terminal Punch Recorded Today</span>
                   )}
                 </div>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-400 mt-0.5">
                   {myCheckIn
                     ? `Source: ${myCheckIn.deviceName || 'Main Terminal'}`
                     : 'Scan your RFID badge or fingerprint at the Secureye terminal upon arrival.'}
