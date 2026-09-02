@@ -991,12 +991,41 @@ export default function ApprovalsPage() {
         <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-fadeIn">
           <div className="bg-white border border-slate-200 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-scaleUp text-xs max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b pb-3">
-              <div>
-                <h4 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-                  <Eye className="w-4 h-4 text-[#a92427]" />
-                  <span>Request Full Details</span>
-                </h4>
-                <p className="text-[11px] text-slate-400">Complete breakdown of workforce sign-off</p>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  {selectedItem.category === 'LEAVE' && (
+                    <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      Leave Application
+                    </span>
+                  )}
+                  {selectedItem.category === 'REGULARIZATION' && (
+                    <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                      Attendance Time Correction
+                    </span>
+                  )}
+                  {selectedItem.category === 'PAYSLIP' && (
+                    <span className="px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                      Payslip Authorization
+                    </span>
+                  )}
+
+                  {selectedItem.status === 'APPROVED' && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      Approved
+                    </span>
+                  )}
+                  {selectedItem.status === 'PENDING' && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                      Pending Review
+                    </span>
+                  )}
+                  {selectedItem.status === 'REJECTED' && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                      Rejected
+                    </span>
+                  )}
+                </div>
+                <h4 className="font-bold text-slate-900 text-sm">{selectedItem.title}</h4>
               </div>
               <button
                 onClick={() => setSelectedItem(null)}
@@ -1007,28 +1036,64 @@ export default function ApprovalsPage() {
             </div>
 
             <div className="space-y-3">
+              {/* Employee Header */}
               <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 grid grid-cols-2 gap-3">
                 <div>
-                  <span className="text-slate-400 block text-[10px]">Employee</span>
-                  <span className="font-bold text-slate-900">{selectedItem.employeeName} ({selectedItem.employeeCode})</span>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Employee</span>
+                  <span className="font-bold text-slate-900">{selectedItem.employeeName}</span>
+                  <span className="text-slate-400 font-mono text-[11px] block">{selectedItem.employeeCode}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[10px]">Department</span>
+                  <span className="text-slate-400 block text-[10px] uppercase font-bold">Department</span>
                   <span className="font-semibold text-slate-800">{selectedItem.department}</span>
                 </div>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
-                <span className="text-slate-400 block text-[10px]">Request Summary</span>
-                <span className="font-bold text-slate-900">{selectedItem.title}</span>
-                <div className="text-slate-500 font-mono text-[11px] mt-0.5">{selectedItem.subtitle}</div>
-              </div>
+              {/* Attendance Regularization Punch Comparison */}
+              {selectedItem.category === 'REGULARIZATION' && (
+                <div className="p-3.5 rounded-2xl bg-blue-50/50 border border-blue-200 grid grid-cols-2 gap-3 font-mono">
+                  <div>
+                    <span className="text-slate-500 block text-[10px] uppercase font-bold font-sans">Raw Machine Scan</span>
+                    <span className="text-slate-700 font-bold text-xs">
+                      {selectedItem.rawItem?.recordedCheckIn ? `${selectedItem.rawItem.recordedCheckIn}` : 'No Punch Detected'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-blue-800 block text-[10px] uppercase font-bold font-sans">Requested Adjustment</span>
+                    <span className="text-blue-900 font-bold text-xs">
+                      {selectedItem.rawItem?.requestedCheckIn || '--:--'} - {selectedItem.rawItem?.requestedCheckOut || '--:--'}
+                    </span>
+                  </div>
+                </div>
+              )}
 
+              {/* Reason */}
               <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200">
-                <span className="text-slate-400 block text-[10px]">Explanation Given</span>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Submitted Explanation / Notes</span>
                 <p className="text-slate-800 mt-1">{selectedItem.reason}</p>
               </div>
 
+              {/* Reviewer / Decision Trail */}
+              {(selectedItem.rawItem?.reviewedBy || selectedItem.rejectionReason) && (
+                <div className={`p-3.5 rounded-2xl border ${selectedItem.status === 'APPROVED' ? 'bg-emerald-50/60 border-emerald-200 text-emerald-900' : 'bg-rose-50/60 border-rose-200 text-rose-900'}`}>
+                  <span className="block text-[10px] uppercase font-bold">Managerial Review Audit Trail</span>
+                  <div className="mt-1 space-y-0.5">
+                    {selectedItem.rawItem?.reviewedBy && (
+                      <div>Reviewed by: <strong>{selectedItem.rawItem.reviewedBy}</strong></div>
+                    )}
+                    {selectedItem.rawItem?.reviewedAt && (
+                      <div className="text-[10px] opacity-75 font-mono">
+                        Date: {format(new Date(selectedItem.rawItem.reviewedAt), 'dd MMM yyyy, HH:mm:ss')} IST
+                      </div>
+                    )}
+                    {selectedItem.rejectionReason && (
+                      <div className="text-rose-700 font-semibold mt-1">Rejection Reason: {selectedItem.rejectionReason}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Supporting Document */}
               {selectedItem.proofDocumentUrl && (
                 <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 space-y-2">
                   <span className="text-amber-900 font-bold block text-[11px]">Supporting Certificate Preview</span>
@@ -1046,7 +1111,7 @@ export default function ApprovalsPage() {
             <div className="flex justify-end pt-2 border-t">
               <button
                 onClick={() => setSelectedItem(null)}
-                className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs"
+                className="px-5 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition"
               >
                 Close Inspection
               </button>
