@@ -58,8 +58,12 @@ export async function GET(req: NextRequest) {
     const structList = await salaryStructures.find({}).toArray();
 
     const userByEmpId = new Map<string, any>();
+    const userByMobile = new Map<string, any>();
+    const userByEmail = new Map<string, any>();
     for (const u of userList) {
-      if (u.employeeId) userByEmpId.set(u.employeeId, u);
+      if (u.employeeId) userByEmpId.set(String(u.employeeId), u);
+      if (u.mobileNumber) userByMobile.set(String(u.mobileNumber), u);
+      if (u.email) userByEmail.set(String(u.email).toLowerCase(), u);
     }
 
     const roleById = new Map<string, any>();
@@ -79,7 +83,9 @@ export async function GET(req: NextRequest) {
     }
 
     let mappedEmployees = empList.map((emp: any) => {
-      const user = userByEmpId.get(emp.id);
+      const user = userByEmpId.get(String(emp.id)) ||
+                   (emp.mobileNumber && userByMobile.get(String(emp.mobileNumber))) ||
+                   (emp.email && userByEmail.get(String(emp.email).toLowerCase()));
       const userRole = user?.roleId ? roleById.get(user.roleId) : (user?.role ? roleById.get(user.role) : null);
       const struct = emp.salaryStructureId ? structById.get(emp.salaryStructureId) : null;
       const manager = emp.managerId ? empById.get(emp.managerId) : null;

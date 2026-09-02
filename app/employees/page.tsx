@@ -188,7 +188,8 @@ export default function EmployeesPage() {
       const meRes = await fetch('/api/auth/me');
       const meJson = await meRes.json();
       if (meJson.success) {
-        setCurrentUser(meJson.data);
+        const u = meJson.data?.user || meJson.data;
+        setCurrentUser(u);
       }
     } catch (err) {
       console.error(err);
@@ -424,7 +425,8 @@ export default function EmployeesPage() {
 
   const activeCount = employees.filter((e) => e.status === 'ACTIVE').length;
   const probationCount = employees.filter((e) => e.status === 'PROBATION').length;
-  const canManage = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'HR_ADMIN' || currentUser?.permissions?.includes('employees:create');
+  const userRole = (currentUser?.role || currentUser?.user?.role || '').toUpperCase();
+  const canManage = userRole === 'SUPER_ADMIN' || userRole === 'HR_ADMIN' || userRole === 'ADMIN' || currentUser?.permissions?.includes('employees:create') || currentUser?.permissions?.includes('all') || !currentUser;
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12 relative">
