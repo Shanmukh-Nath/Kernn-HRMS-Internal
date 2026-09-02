@@ -32,6 +32,8 @@
       "minimumSystemVersion": "10.13.0",
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
       "artifactName": "${productName}-${version}-${arch}.${ext}",
       "target": [
         { "target": "dmg", "arch": ["x64", "arm64"] },

@@ -1,19 +1,26 @@
 workflows:
-  build-macos-app:
-    name: Build macOS DMG (Intel & Apple Silicon)
+  build-macos-desktop-bridge:
+    name: Build Kernn Sync Bridge (macOS Universal)
     max_build_duration: 30
     instance_type: mac_mini_m1
+    working_directory: desktop-bridge
     environment:
-      node: 20
+      node: latest
     scripts:
-      - name: Install Desktop Bridge Dependencies
+      - name: Install Dependencies
         script: |
-          cd desktop-bridge
-          npm install
-      - name: Package macOS App & DMG
+          npm ci || npm install
+      - name: Build macOS Binaries (DMG & ZIP for Intel x64 & Apple Silicon arm64)
         script: |
-          cd desktop-bridge
           npm run build:mac
     artifacts:
       - desktop-bridge/dist/*.dmg
       - desktop-bridge/dist/*.zip
+      - desktop-bridge/dist/*.blockmap
+    publishing:
+      email:
+        recipients:
+          - shanmukhnath07@gmail.com
+        notify:
+          success: true
+          failure: true
