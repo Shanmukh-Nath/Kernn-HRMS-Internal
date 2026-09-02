@@ -134,10 +134,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const empCol = await employeesCol();
+    const empDoc = await empCol.findOne({ $or: [{ id: employeeId }, { _id: employeeId }] });
+
     // 2. Check Biometric Punch Verification
     const recordedEvents = await attCol
       .find({
-        employeeId,
+        $or: [
+          { employeeId: empDoc?.id || employeeId },
+          ...(empDoc?.deviceUserId ? [{ deviceUserId: String(empDoc.deviceUserId) }] : []),
+        ],
         timestamp: { $gte: workedDateStart, $lte: workedDateEnd },
       })
       .sort({ timestamp: 1 })
@@ -188,11 +194,11 @@ export async function POST(req: NextRequest) {
     if (action === 'GRANT' && isManagerOrAdmin) {
       // Direct Admin Grant -> Immediate Credit
       await lbCol.updateOne(
-        { employeeId, leaveTypeId: compOffType!.id, year: 2026 },
+        { employeeId, leaveTypeId: compOffType!.id },
         {
           $inc: { balance: daysToCredit, earned: daysToCredit },
           $set: { updatedAt: now },
-          $setOnInsert: { id: generateId(), used: 0, pending: 0, createdAt: now },
+          $setOnInsert: { id: generateId(), used: 0, pending: 0, year: now.getFullYear(), createdAt: now },
         },
         { upsert: true }
       );
@@ -202,8 +208,9 @@ export async function POST(req: NextRequest) {
         employeeId,
         leaveTypeId: compOffType!.id,
         amount: daysToCredit,
+        creditedAmount: daysToCredit,
         accrualDate: now,
-        notes: `Comp-Off granted for working on ${workedDate} (${isWeekend ? 'Weekend' : 'Holiday'}). Verified biometric punches: ${punchCount}.`,
+        notes: `Comp-Off granted directly by ${session.name || session.userId} for worked date ${workedDate} (${isWeekend ? 'Weekend' : 'Holiday'}). Verified biometric punches: ${punchCount}.`,
         createdAt: now,
       });
 

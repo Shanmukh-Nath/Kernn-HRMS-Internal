@@ -429,24 +429,19 @@ export async function processLeaveApproval(
         status: action,
         approvedById,
         rejectionReason: rejectionReason || null,
+        reviewedAt: now,
         updatedAt: now,
       },
     }
   );
 
+  const days = Number(req.totalDays) || 1;
+
   if (action === 'APPROVED') {
     await leaveBalances.updateOne(
-      { employeeId: req.employeeId, leaveTypeId: req.leaveTypeId, year: 2026 },
+      { employeeId: req.employeeId, leaveTypeId: req.leaveTypeId },
       {
-        $inc: { pending: -req.totalDays, used: req.totalDays },
-        $set: { updatedAt: now },
-      }
-    );
-  } else {
-    await leaveBalances.updateOne(
-      { employeeId: req.employeeId, leaveTypeId: req.leaveTypeId, year: 2026 },
-      {
-        $inc: { pending: -req.totalDays, balance: req.totalDays },
+        $inc: { balance: -days, used: days },
         $set: { updatedAt: now },
       }
     );

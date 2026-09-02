@@ -64,11 +64,11 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       if (compOffType) {
         // Credit the employee's Comp-Off balance
         await lbCol.updateOne(
-          { employeeId: claim.employeeId, leaveTypeId: compOffType.id, year: 2026 },
+          { employeeId: claim.employeeId, leaveTypeId: compOffType.id },
           {
             $inc: { balance: daysToCredit, earned: daysToCredit },
             $set: { updatedAt: now },
-            $setOnInsert: { id: generateId(), used: 0, pending: 0, createdAt: now },
+            $setOnInsert: { id: generateId(), used: 0, pending: 0, year: now.getFullYear(), createdAt: now },
           },
           { upsert: true }
         );
@@ -78,6 +78,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
           employeeId: claim.employeeId,
           leaveTypeId: compOffType.id,
           amount: daysToCredit,
+          creditedAmount: daysToCredit,
           accrualDate: now,
           notes: `Comp-Off approved by ${session.name || session.userId} for working on ${claim.workedDate} (${claim.dayOfWeek}).`,
           createdAt: now,

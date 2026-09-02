@@ -150,8 +150,12 @@ export async function GET(req: NextRequest) {
 
       // Check if on leave
       const leave = leaves.find((l) => {
-        const s = l.startDate ? formatAppDate(parseAppDate(l.startDate)) : '';
-        const e = l.endDate ? formatAppDate(parseAppDate(l.endDate)) : '';
+        const s = l.startDate
+          ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(parseAppDate(l.startDate))
+          : '';
+        const e = l.endDate
+          ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(parseAppDate(l.endDate))
+          : '';
         return dateStr >= s && dateStr <= e;
       });
 

@@ -213,7 +213,10 @@ export async function POST(req: NextRequest) {
     const advanceNoticeDays = differenceInCalendarDays(start, today);
 
     // 5. Evaluate Application Limits & Proof Requirements
-    const proofProvided = Boolean((body.proofDocumentNotes || body.medicalCertificateNotes || '').trim().length >= 3);
+    const proofProvided = Boolean(
+      body.proofDocumentUrl ||
+      (body.proofDocumentNotes || body.medicalCertificateNotes || '').trim().length >= 3
+    );
 
     const currentMonth = format(new Date(), 'yyyy-MM');
     const currentYear = format(new Date(), 'yyyy');
