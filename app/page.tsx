@@ -53,8 +53,15 @@ export default function DashboardPage() {
 
   // Time Correction Modal State (for Employee)
   const [showCorrectionModal, setShowCorrectionModal] = useState(false);
-  const [correctionForm, setCorrectionForm] = useState({
+  const [correctionForm, setCorrectionForm] = useState<{
+    date: string;
+    adjustmentType: 'CHECK_IN' | 'CHECK_OUT' | 'BOTH';
+    requestedCheckIn: string;
+    requestedCheckOut: string;
+    reason: string;
+  }>({
     date: format(new Date(), 'yyyy-MM-dd'),
+    adjustmentType: 'CHECK_IN',
     requestedCheckIn: '09:00',
     requestedCheckOut: '18:00',
     reason: '',
@@ -545,6 +552,116 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {/* My Attendance Regularizations & Adjustment History */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-blue-600" />
+                  <span>My Attendance Correction History</span>
+                </h3>
+                <p className="text-[11px] text-slate-400">Track the lifecycle of your submitted time adjustment requests</p>
+              </div>
+
+              <button
+                onClick={() => {
+                  setCorrectionForm({
+                    date: format(new Date(), 'yyyy-MM-dd'),
+                    adjustmentType: 'CHECK_IN',
+                    requestedCheckIn: '09:00',
+                    requestedCheckOut: '18:00',
+                    reason: '',
+                  });
+                  setShowCorrectionModal(true);
+                }}
+                className="px-4 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs border border-blue-200 transition flex items-center gap-1.5 self-start sm:self-auto"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New Time Adjustment</span>
+              </button>
+            </div>
+
+            {myRegularizations.length === 0 ? (
+              <div className="p-8 text-center text-slate-400 text-xs">
+                <Clock className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="font-semibold text-slate-600">No Attendance Correction Requests</p>
+                <p className="text-slate-400">If your biometric punch was missed or delayed by a hardware glitch, submit a correction here.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 bg-slate-50/50">
+                      <th className="py-3 px-4">Date</th>
+                      <th className="py-3 px-4">Adjustment Scope</th>
+                      <th className="py-3 px-4 font-mono">Requested Times</th>
+                      <th className="py-3 px-4">Reason</th>
+                      <th className="py-3 px-4 text-center">Status</th>
+                      <th className="py-3 px-4 text-right">Audit / Reviewer</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {myRegularizations.map((reg) => (
+                      <tr key={reg.id || reg._id} className="hover:bg-slate-50/60 transition">
+                        <td className="py-3.5 px-4 font-mono font-bold text-slate-800">
+                          {format(new Date(reg.date), 'dd MMM yyyy')}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className="px-2.5 py-1 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">
+                            {reg.adjustmentType === 'CHECK_IN'
+                              ? 'Check-In Only'
+                              : reg.adjustmentType === 'CHECK_OUT'
+                              ? 'Check-Out Only'
+                              : 'Both (In & Out)'}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 font-mono font-medium text-slate-700">
+                          {reg.requestedCheckIn && <span>In: <strong className="text-emerald-700">{reg.requestedCheckIn}</strong> </span>}
+                          {reg.requestedCheckOut && <span>Out: <strong className="text-blue-700">{reg.requestedCheckOut}</strong></span>}
+                        </td>
+                        <td className="py-3.5 px-4 max-w-xs text-slate-600">
+                          <div className="truncate" title={reg.reason}>{reg.reason}</div>
+                          {reg.rejectionReason && (
+                            <div className="text-[10px] text-rose-600 font-semibold mt-0.5">Note: {reg.rejectionReason}</div>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                          {reg.status === 'APPROVED' && (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              Approved & Active
+                            </span>
+                          )}
+                          {reg.status === 'PENDING' && (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                              Pending Review
+                            </span>
+                          )}
+                          {reg.status === 'REJECTED' && (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                              Rejected
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 text-right text-[11px] text-slate-500">
+                          {reg.reviewedBy ? (
+                            <div>
+                              <span className="font-semibold text-slate-700">{reg.reviewedBy}</span>
+                              <div className="text-[9px] text-slate-400">
+                                {reg.reviewedAt ? format(new Date(reg.reviewedAt), 'dd MMM, HH:mm') : ''}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 italic">Awaiting Manager</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
           {/* Company Notices & Upcoming Holidays */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Notices */}
@@ -619,9 +736,9 @@ export default function DashboardPage() {
               <div>
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                   <Clock className="w-4 h-4 text-blue-600" />
-                  <span>Request Punch Correction</span>
+                  <span>Request Punch Time Adjustment</span>
                 </h3>
-                <p className="text-[11px] text-slate-400">Adjust check-in/out time if the biometric terminal recorded incorrectly</p>
+                <p className="text-[11px] text-slate-400">Select what needs adjustment: Check-in, Check-out, or both</p>
               </div>
               <button onClick={() => setShowCorrectionModal(false)} className="p-1 rounded-lg hover:bg-slate-100 text-slate-400">
                 &times;
@@ -637,7 +754,7 @@ export default function DashboardPage() {
 
             <form onSubmit={handleCorrectionSubmit} className="space-y-3">
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Date of Punch</label>
+                <label className="block font-bold text-slate-700 mb-1">Date of Punch *</label>
                 <input
                   type="date"
                   value={correctionForm.date}
@@ -647,36 +764,84 @@ export default function DashboardPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Actual Check-In Time</label>
-                  <input
-                    type="time"
-                    value={correctionForm.requestedCheckIn}
-                    onChange={(e) => setCorrectionForm({ ...correctionForm, requestedCheckIn: e.target.value })}
-                    required
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono"
-                  />
-                </div>
+              {/* Adjustment Type Selector */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5">What needs adjustment? *</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCorrectionForm({ ...correctionForm, adjustmentType: 'CHECK_IN' as any })}
+                    className={`py-2 px-2.5 rounded-xl font-bold text-[11px] border transition text-center ${
+                      correctionForm.adjustmentType === 'CHECK_IN'
+                        ? 'bg-blue-50 border-blue-400 text-blue-800 shadow-2xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    Check-In Only
+                  </button>
 
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Actual Check-Out Time</label>
-                  <input
-                    type="time"
-                    value={correctionForm.requestedCheckOut}
-                    onChange={(e) => setCorrectionForm({ ...correctionForm, requestedCheckOut: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono"
-                  />
+                  <button
+                    type="button"
+                    onClick={() => setCorrectionForm({ ...correctionForm, adjustmentType: 'CHECK_OUT' as any })}
+                    className={`py-2 px-2.5 rounded-xl font-bold text-[11px] border transition text-center ${
+                      correctionForm.adjustmentType === 'CHECK_OUT'
+                        ? 'bg-blue-50 border-blue-400 text-blue-800 shadow-2xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    Check-Out Only
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setCorrectionForm({ ...correctionForm, adjustmentType: 'BOTH' as any })}
+                    className={`py-2 px-2.5 rounded-xl font-bold text-[11px] border transition text-center ${
+                      correctionForm.adjustmentType === 'BOTH'
+                        ? 'bg-blue-50 border-blue-400 text-blue-800 shadow-2xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    Both In & Out
+                  </button>
                 </div>
               </div>
 
+              {/* Time Inputs based on Selection */}
+              <div className="grid grid-cols-2 gap-3">
+                {(correctionForm.adjustmentType === 'CHECK_IN' || correctionForm.adjustmentType === 'BOTH') && (
+                  <div className={correctionForm.adjustmentType === 'CHECK_IN' ? 'col-span-2' : 'col-span-1'}>
+                    <label className="block font-bold text-slate-700 mb-1">Actual Check-In Time (IST) *</label>
+                    <input
+                      type="time"
+                      value={correctionForm.requestedCheckIn}
+                      onChange={(e) => setCorrectionForm({ ...correctionForm, requestedCheckIn: e.target.value })}
+                      required
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900"
+                    />
+                  </div>
+                )}
+
+                {(correctionForm.adjustmentType === 'CHECK_OUT' || correctionForm.adjustmentType === 'BOTH') && (
+                  <div className={correctionForm.adjustmentType === 'CHECK_OUT' ? 'col-span-2' : 'col-span-1'}>
+                    <label className="block font-bold text-slate-700 mb-1">Actual Check-Out Time (IST) *</label>
+                    <input
+                      type="time"
+                      value={correctionForm.requestedCheckOut}
+                      onChange={(e) => setCorrectionForm({ ...correctionForm, requestedCheckOut: e.target.value })}
+                      required
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-bold text-slate-900"
+                    />
+                  </div>
+                )}
+              </div>
+
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Explanation Reason</label>
+                <label className="block font-bold text-slate-700 mb-1">Explanation Reason *</label>
                 <textarea
                   rows={3}
                   value={correctionForm.reason}
                   onChange={(e) => setCorrectionForm({ ...correctionForm, reason: e.target.value })}
-                  placeholder="e.g. Device sensor did not beep, entered office at 09:05 AM with client meeting..."
+                  placeholder="e.g. Device sensor did not beep, attended early client discussion at 09:00 AM..."
                   required
                   className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200"
                 />
@@ -693,7 +858,7 @@ export default function DashboardPage() {
                 <button
                   type="submit"
                   disabled={correctionSubmitting}
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition disabled:opacity-50"
+                  className="px-5 py-2 rounded-xl bg-[#a92427] hover:bg-[#8e1d20] text-white font-bold transition disabled:opacity-50"
                 >
                   {correctionSubmitting ? 'Submitting...' : 'Submit to Manager'}
                 </button>

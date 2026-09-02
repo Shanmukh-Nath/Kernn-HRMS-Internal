@@ -74,27 +74,39 @@ export default function ApprovalsPage() {
     fetchAllApprovals();
   }, []);
 
+  const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({
+    show: false,
+    message: '',
+    type: 'success',
+  });
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => {
+      setToast({ show: false, message: '', type: 'success' });
+    }, 4000);
+  };
+
   const handleApproveLeave = async (id: string) => {
-    if (!confirm('Approve this leave request? Leave quota will be deducted accordingly.')) return;
     setActionLoading(true);
     try {
       const res = await fetch(`/api/leaves/${id}/approve`, { method: 'POST' });
       const json = await res.json();
       if (json.success) {
+        showToast(json.message || 'Leave request approved successfully!', 'success');
         fetchAllApprovals();
         if (selectedItem?.id === id) setSelectedItem(null);
       } else {
-        alert(json.error?.message || 'Approval failed');
+        showToast(json.error?.message || 'Approval failed', 'error');
       }
     } catch {
-      alert('Error approving leave');
+      showToast('Network error approving leave', 'error');
     } finally {
       setActionLoading(false);
     }
   };
 
   const handleApproveReg = async (id: string) => {
-    if (!confirm('Approve this attendance correction? Punch times will be regularized in the system.')) return;
     setActionLoading(true);
     try {
       const res = await fetch('/api/attendance/regularize', {
@@ -104,20 +116,20 @@ export default function ApprovalsPage() {
       });
       const json = await res.json();
       if (json.success) {
+        showToast(json.message || 'Attendance correction approved and punch times updated!', 'success');
         fetchAllApprovals();
         if (selectedItem?.id === id) setSelectedItem(null);
       } else {
-        alert(json.error?.message || 'Approval failed');
+        showToast(json.error?.message || 'Approval failed', 'error');
       }
     } catch {
-      alert('Error approving attendance correction');
+      showToast('Network error approving attendance correction', 'error');
     } finally {
       setActionLoading(false);
     }
   };
 
   const handleApprovePayslip = async (id: string) => {
-    if (!confirm('Authorize this employee to download and print their official salary slip?')) return;
     setActionLoading(true);
     try {
       const res = await fetch('/api/payroll/download-approval', {
@@ -127,13 +139,14 @@ export default function ApprovalsPage() {
       });
       const json = await res.json();
       if (json.success) {
+        showToast(json.message || 'Payslip download authorized successfully!', 'success');
         fetchAllApprovals();
         if (selectedItem?.id === id) setSelectedItem(null);
       } else {
-        alert(json.error?.message || 'Approval failed');
+        showToast(json.error?.message || 'Approval failed', 'error');
       }
     } catch {
-      alert('Error approving payslip download request');
+      showToast('Network error approving payslip download', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -142,7 +155,7 @@ export default function ApprovalsPage() {
   const handleConfirmReject = async () => {
     if (!rejectingItem) return;
     if (!rejectionReason.trim()) {
-      alert('Please provide a reason for rejection.');
+      showToast('Please provide a reason for rejection.', 'error');
       return;
     }
     setActionLoading(true);
@@ -166,12 +179,13 @@ export default function ApprovalsPage() {
           body: JSON.stringify({ id: rejectingItem.id, action: 'REJECT', rejectionReason }),
         });
       }
+      showToast('Request rejected with feedback note.', 'success');
       setRejectingItem(null);
       setRejectionReason('');
       if (selectedItem?.id === rejectingItem.id) setSelectedItem(null);
       fetchAllApprovals();
     } catch {
-      alert('Error rejecting item');
+      showToast('Network error rejecting request', 'error');
     } finally {
       setActionLoading(false);
     }
@@ -263,7 +277,33 @@ export default function ApprovalsPage() {
   const isSupervisor = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'HR_ADMIN' || currentUser?.role === 'MANAGER';
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12 animate-fadeIn">
+    <div className="space-y-6 max-w-7xl mx-auto pb-12 animate-fadeIn relative">
+      {/* Toast Notification */}
+      {toast.show && (
+        <div className="fixed top-6 right-6 z-50 animate-fadeIn">
+          <div
+            className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-xl text-xs font-bold border ${
+              toast.type === 'success'
+                ? 'bg-emerald-900/95 text-emerald-100 border-emerald-500/30'
+                : 'bg-rose-900/95 text-rose-100 border-rose-500/30'
+            }`}
+          >
+            {toast.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            )}
+            <span>{toast.message}</span>
+            <button
+              onClick={() => setToast({ show: false, message: '', type: 'success' })}
+              className="ml-2 text-slate-400 hover:text-white"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
         <div>

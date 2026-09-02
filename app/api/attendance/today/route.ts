@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
     const devMap = new Map(devices.map((d) => [String(d.id || d.deviceId), d.name || 'Terminal 1']));
 
     // Group events by employee
-    const checkinMap: Record<string, { firstIn: string; lastOut: string; deviceName: string; punchCount: number }> = {};
+    const checkinMap: Record<string, { firstIn: string; lastOut: string; deviceName: string; punchCount: number; isRegularized?: boolean }> = {};
     for (const ev of todayEvents) {
       const emp = (ev.employeeId && empById.get(String(ev.employeeId))) || (ev.deviceUserId && empByDeviceUserId.get(String(ev.deviceUserId)));
       if (!emp) continue;
@@ -83,13 +83,27 @@ export async function GET(req: NextRequest) {
       .toArray();
 
     for (const reg of regularizations) {
-      if (!checkinMap[reg.employeeId]) {
-        checkinMap[reg.employeeId] = {
-          firstIn: `${todayStr}T${reg.requestedCheckIn}:00`,
-          lastOut: reg.requestedCheckOut ? `${todayStr}T${reg.requestedCheckOut}:00` : `${todayStr}T${reg.requestedCheckIn}:00`,
+      const empId = String(reg.employeeId);
+      const regInDate = reg.requestedCheckIn ? parseAppDate(`${todayStr}T${reg.requestedCheckIn}:00+05:30`) : null;
+      const regOutDate = reg.requestedCheckOut ? parseAppDate(`${todayStr}T${reg.requestedCheckOut}:00+05:30`) : null;
+
+      if (!checkinMap[empId]) {
+        checkinMap[empId] = {
+          firstIn: regInDate ? regInDate.toISOString() : (regOutDate ? regOutDate.toISOString() : ''),
+          lastOut: regOutDate ? regOutDate.toISOString() : (regInDate ? regInDate.toISOString() : ''),
           deviceName: 'Regularized (Manager Approved)',
-          punchCount: reg.requestedCheckOut ? 2 : 1,
+          punchCount: reg.requestedCheckIn && reg.requestedCheckOut ? 2 : 1,
+          isRegularized: true,
         };
+      } else {
+        if (regInDate) {
+          checkinMap[empId].firstIn = regInDate.toISOString();
+        }
+        if (regOutDate) {
+          checkinMap[empId].lastOut = regOutDate.toISOString();
+        }
+        checkinMap[empId].deviceName = 'Regularized (Manager Approved)';
+        checkinMap[empId].isRegularized = true;
       }
     }
 
@@ -107,7 +121,14 @@ export async function GET(req: NextRequest) {
 
     const onLeaveSet = new Set(approvedLeaves.map((l) => l.employeeId));
 
-    // 4. Categorize employees
+    // 4. Scope employees by role
+    const isEmployeeRole = session.role === 'EMPLOYEE' || (!['SUPER_ADMIN', 'HR_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role || ''));
+    let filteredEmployees = employees;
+    if (isEmployeeRole && session.employeeId) {
+      filteredEmployees = employees.filter((e) => String(e.id || e._id) === String(session.employeeId));
+    }
+
+    // 5. Categorize employees
     const todayCheckIns: any[] = [];
     const todayOnLeave: any[] = [];
     const notYetArrived: any[] = [];
@@ -116,7 +137,7 @@ export async function GET(req: NextRequest) {
     const SHIFT_START_HOUR = 9;
     const SHIFT_START_MINUTE = 15;
 
-    for (const emp of employees) {
+    for (const emp of filteredEmployees) {
       if (onLeaveSet.has(emp.id)) {
         const leaveInfo = approvedLeaves.find((l) => l.employeeId === emp.id);
         const lt = leaveInfo ? ltMap.get(leaveInfo.leaveTypeId) : null;
@@ -146,10 +167,12 @@ export async function GET(req: NextRequest) {
 
         const inHour = Number(timeParts.find((p) => p.type === 'hour')?.value || '0');
         const inMin = Number(timeParts.find((p) => p.type === 'minute')?.value || '0');
-        const isLate = inHour > SHIFT_START_HOUR || (inHour === SHIFT_START_HOUR && inMin > SHIFT_START_MINUTE);
+        const isLate = checkinMap[emp.id].isRegularized
+          ? false
+          : (inHour > SHIFT_START_HOUR || (inHour === SHIFT_START_HOUR && inMin > SHIFT_START_MINUTE));
         if (isLate) lateCount++;
 
-        const hasCheckOut = checkinMap[emp.id].punchCount > 1 || checkinMap[emp.id].firstIn !== checkinMap[emp.id].lastOut;
+        const hasCheckOut = Boolean(checkinMap[emp.id].lastOut && checkinMap[emp.id].lastOut !== checkinMap[emp.id].firstIn);
 
         todayCheckIns.push({
           employeeId: emp.id,
@@ -159,7 +182,7 @@ export async function GET(req: NextRequest) {
           designation: emp.designation,
           checkInTime: checkinMap[emp.id].firstIn,
           checkOutTime: hasCheckOut ? checkinMap[emp.id].lastOut : null,
-          status: isLate ? 'LATE' : 'ON_TIME',
+          status: checkinMap[emp.id].isRegularized ? 'REGULARIZED' : (isLate ? 'LATE' : 'ON_TIME'),
           deviceName: checkinMap[emp.id].deviceName,
         });
       } else {

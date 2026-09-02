@@ -68,13 +68,13 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { date, requestedCheckIn, requestedCheckOut, reason } = body;
+    const { date, requestedCheckIn, requestedCheckOut, reason, adjustmentType } = body;
 
-    if (!date || !requestedCheckIn || !reason) {
+    if (!date || (!requestedCheckIn && !requestedCheckOut) || !reason) {
       return NextResponse.json(
         {
           success: false,
-          error: { code: 'INVALID_INPUT', message: 'Date, requested check-in time, and reason are required' },
+          error: { code: 'INVALID_INPUT', message: 'Date, at least one adjusted time (Check-in or Check-out), and reason are required' },
         },
         { status: 400 }
       );
@@ -83,10 +83,8 @@ export async function POST(req: NextRequest) {
     const regCol = await attendanceRegularizationsCol();
     const attCol = await attendanceEventsCol();
 
-    const targetDayStart = new Date(date);
-    targetDayStart.setHours(0, 0, 0, 0);
-    const targetDayEnd = new Date(date);
-    targetDayEnd.setHours(23, 59, 59, 999);
+    const targetDayStart = new Date(`${date}T00:00:00+05:30`);
+    const targetDayEnd = new Date(`${date}T23:59:59.999+05:30`);
 
     const recordedEvents = await attCol
       .find({
@@ -110,9 +108,10 @@ export async function POST(req: NextRequest) {
       id,
       employeeId: session.employeeId,
       date,
+      adjustmentType: adjustmentType || (requestedCheckIn && requestedCheckOut ? 'BOTH' : requestedCheckIn ? 'CHECK_IN' : 'CHECK_OUT'),
       recordedCheckIn,
       recordedCheckOut,
-      requestedCheckIn,
+      requestedCheckIn: requestedCheckIn || null,
       requestedCheckOut: requestedCheckOut || null,
       reason,
       status: 'PENDING',
@@ -182,26 +181,31 @@ export async function PUT(req: NextRequest) {
         }
       );
 
-      const checkInDateTime = new Date(`${request.date}T${request.requestedCheckIn}:00.000Z`);
-      await attCol.insertOne({
-        id: generateId(),
-        deviceId: 'default_device',
-        employeeId: request.employeeId,
-        timestamp: checkInDateTime,
-        eventType: 'CHECK_IN',
-        verificationMode: 'REGULARIZED_BY_MANAGER',
-        rawPayload: `Regularized by ${session.name}: ${request.reason}`,
-        createdAt: now,
-      });
+      // Create proper IST timestamps for the punches
+      if (request.requestedCheckIn) {
+        const checkInDateTime = new Date(`${request.date}T${request.requestedCheckIn}:00+05:30`);
+        await attCol.insertOne({
+          id: generateId(),
+          deviceId: 'default_device',
+          employeeId: request.employeeId,
+          timestamp: checkInDateTime,
+          eventType: 'CHECK_IN',
+          verificationType: 'REGULARIZED_BY_MANAGER',
+          verificationMode: 'REGULARIZED_BY_MANAGER',
+          rawPayload: `Regularized by ${session.name}: ${request.reason}`,
+          createdAt: now,
+        });
+      }
 
       if (request.requestedCheckOut) {
-        const checkOutDateTime = new Date(`${request.date}T${request.requestedCheckOut}:00.000Z`);
+        const checkOutDateTime = new Date(`${request.date}T${request.requestedCheckOut}:00+05:30`);
         await attCol.insertOne({
           id: generateId(),
           deviceId: 'default_device',
           employeeId: request.employeeId,
           timestamp: checkOutDateTime,
           eventType: 'CHECK_OUT',
+          verificationType: 'REGULARIZED_BY_MANAGER',
           verificationMode: 'REGULARIZED_BY_MANAGER',
           rawPayload: `Regularized by ${session.name}: ${request.reason}`,
           createdAt: now,

@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getAuthSession } from '@/lib/auth';
 import { formatAppDate, formatAppTime } from '@/lib/timezone';
 import { decodeVerifyMode } from '@/server/secureye/native-bridge';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  const session = await getAuthSession();
   const searchParams = req.nextUrl.searchParams;
   const format = searchParams.get('format'); // 'json' or 'csv'
   const deviceId = searchParams.get('deviceId');
@@ -20,8 +22,14 @@ export async function GET(req: NextRequest) {
 
   const whereClause: Record<string, unknown> = {};
 
+  const isEmployeeRole = session && (session.role === 'EMPLOYEE' || !['SUPER_ADMIN', 'HR_ADMIN', 'ADMIN', 'MANAGER'].includes(session.role || ''));
+  if (isEmployeeRole && session?.employeeId) {
+    whereClause.employeeId = session.employeeId;
+  } else if (employeeId) {
+    whereClause.employeeId = employeeId;
+  }
+
   if (deviceId) whereClause.deviceId = deviceId;
-  if (employeeId) whereClause.employeeId = employeeId;
   if (eventType) whereClause.eventType = eventType;
   if (verificationType) whereClause.verificationType = verificationType;
 
