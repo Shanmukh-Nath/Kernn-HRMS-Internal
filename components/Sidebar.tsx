@@ -55,44 +55,37 @@ export function Sidebar() {
     if (role === 'SUPER_ADMIN') {
       return [
         {
-          title: 'OVERVIEW',
+          title: 'CORE PLATFORM',
           items: [
             { name: 'Dashboard', href: '/', icon: LayoutDashboard },
             { name: 'Universal Reports', href: '/reports', icon: FileSpreadsheet, badge: 'All Hub' },
           ],
         },
         {
-          title: 'ATTENDANCE & HARDWARE',
+          title: 'TIME & ATTENDANCE',
           items: [
             { name: "Today's Attendance", href: '/daily-attendance', icon: CalendarCheck, highlight: true },
-            { name: 'Live Biometrics', href: '/live', icon: Radio, highlight: true },
-            { name: 'Raw Punches', href: '/attendance', icon: CalendarCheck },
-            { name: 'Hardware Audit Trail', href: '/devices/audit', icon: ShieldCheck, badge: 'Audit' },
-            { name: 'Shift Rules', href: '/settings/rules', icon: Clock },
-            { name: 'Devices & LAN', href: '/devices', icon: HardDrive },
-            { name: 'Protocol Sniffer', href: '/debug', icon: Bug },
+            { name: 'Raw Biometric Ledger', href: '/attendance', icon: Clock },
+            { name: 'Shift & Timing Rules', href: '/settings/rules', icon: Sliders },
+            { name: 'Terminals & LAN', href: '/devices', icon: HardDrive },
           ],
         },
         {
           title: 'PEOPLE & WORKFORCE',
           items: [
             { name: 'Employee Directory', href: '/employees', icon: Users },
-            { name: 'Approvals Hub', href: '/approvals', icon: CheckCircle2, badge: 'All Types', highlight: true },
-            { name: 'Leave Desk', href: '/leaves', icon: Palmtree },
-            { name: 'Leave Accruals', href: '/leaves?tab=ACCRUALS', icon: Clock },
-            { name: 'Leave Policies & Rules', href: '/leaves?tab=POLICIES', icon: Sliders },
+            { name: 'Approvals & Leaves Hub', href: '/approvals', icon: CheckCircle2, badge: 'Action Required', highlight: true },
             { name: 'Public Holidays', href: '/holidays', icon: Calendar },
             { name: 'Notice Board', href: '/announcements', icon: Megaphone },
           ],
         },
         {
-          title: 'PAYROLL & SECURITY',
+          title: 'FINANCE & SECURITY',
           items: [
             { name: 'Payroll Register', href: '/payroll', icon: DollarSign },
-            { name: 'Salary Structures', href: '/payroll?tab=STRUCTURES', icon: Sliders },
-            { name: 'Passkey Devices', href: '/settings/passkeys', icon: Fingerprint },
+            { name: 'Passkey Credentials', href: '/settings/passkeys', icon: Fingerprint },
             { name: 'RBAC Roles Matrix', href: '/roles', icon: Shield },
-            { name: 'System Settings', href: '/settings', icon: Settings2, highlight: true },
+            { name: 'System Settings', href: '/settings', icon: Settings2 },
           ],
         },
       ];
@@ -101,38 +94,35 @@ export function Sidebar() {
     if (role === 'HR_ADMIN') {
       return [
         {
-          title: 'OVERVIEW',
+          title: 'CORE PLATFORM',
           items: [
             { name: 'Dashboard', href: '/', icon: LayoutDashboard },
             { name: 'Universal Reports', href: '/reports', icon: FileSpreadsheet, badge: 'All Hub' },
           ],
         },
         {
-          title: 'ATTENDANCE & TIME',
+          title: 'TIME & ATTENDANCE',
           items: [
             { name: "Today's Attendance", href: '/daily-attendance', icon: CalendarCheck, highlight: true },
-            { name: 'Shift Rules', href: '/settings/rules', icon: Clock },
+            { name: 'Raw Biometric Ledger', href: '/attendance', icon: Clock },
+            { name: 'Shift & Timing Rules', href: '/settings/rules', icon: Sliders },
           ],
         },
         {
           title: 'PEOPLE & WORKFORCE',
           items: [
             { name: 'Employee Directory', href: '/employees', icon: Users },
-            { name: 'Approvals Hub', href: '/approvals', icon: CheckCircle2, badge: 'All Types', highlight: true },
-            { name: 'Leave Desk', href: '/leaves', icon: Palmtree },
-            { name: 'Leave Accruals', href: '/leaves?tab=ACCRUALS', icon: Clock },
-            { name: 'Leave Policies & Rules', href: '/leaves?tab=POLICIES', icon: Sliders },
+            { name: 'Approvals & Leaves Hub', href: '/approvals', icon: CheckCircle2, badge: 'All Types', highlight: true },
             { name: 'Public Holidays', href: '/holidays', icon: Calendar },
             { name: 'Notice Board', href: '/announcements', icon: Megaphone },
           ],
         },
         {
-          title: 'PAYROLL & COMPLIANCE',
+          title: 'FINANCE & COMPLIANCE',
           items: [
             { name: 'Payroll Register', href: '/payroll', icon: DollarSign },
-            { name: 'Salary Structures', href: '/payroll?tab=STRUCTURES', icon: Sliders },
-            { name: 'Passkey Devices', href: '/settings/passkeys', icon: Fingerprint },
-            { name: 'System Settings', href: '/settings', icon: Settings2, highlight: true },
+            { name: 'Passkey Credentials', href: '/settings/passkeys', icon: Fingerprint },
+            { name: 'System Settings', href: '/settings', icon: Settings2 },
           ],
         },
       ];
@@ -141,31 +131,20 @@ export function Sidebar() {
     if (role === 'MANAGER') {
       return [
         {
-          title: 'OVERVIEW',
+          title: 'CORE PLATFORM',
           items: [
             { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-          ],
-        },
-        {
-          title: 'TEAM & ATTENDANCE',
-          items: [
-            { name: "Today's Attendance", href: '/daily-attendance', icon: CalendarCheck, highlight: true },
-            { name: 'Approvals Hub', href: '/approvals', icon: CheckCircle2, badge: 'All Types', highlight: true },
+            { name: "Team Attendance", href: '/daily-attendance', icon: CalendarCheck, highlight: true },
+            { name: 'Approvals Hub', href: '/approvals', icon: CheckCircle2, badge: 'Team', highlight: true },
           ],
         },
         {
           title: 'MY WORKSPACE',
           items: [
-            { name: 'My Leave Desk', href: '/leaves', icon: Palmtree },
+            { name: 'Leave Desk', href: '/leaves', icon: Palmtree },
             { name: 'Notice Board', href: '/announcements', icon: Megaphone },
             { name: 'Public Holidays', href: '/holidays', icon: Calendar },
-          ],
-        },
-        {
-          title: 'SELF SERVICE',
-          items: [
             { name: 'My Payslips', href: '/payroll', icon: DollarSign },
-            { name: 'Passkey Devices', href: '/settings/passkeys', icon: Fingerprint },
           ],
         },
       ];

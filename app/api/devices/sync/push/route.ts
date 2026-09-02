@@ -68,29 +68,10 @@ export async function POST(req: NextRequest) {
       const punchDate = parseAppDate(punch.timestamp);
       const timestampIso = isNaN(punchDate.getTime()) ? new Date().toISOString() : punchDate.toISOString();
 
-      // Find or create employee
-      let emp = await employees.findOne({
-        $or: [{ deviceUserId: uId }, { employeeCode: `EMP-${uId}` }],
+      // Look up existing employee bound to this hardware ID (do NOT auto-create dummy employees)
+      const emp = await employees.findOne({
+        $or: [{ deviceUserId: uId }, { employeeCode: `EMP-${uId}` }, { employeeCode: uId }],
       });
-
-      if (!emp) {
-        const empId = generateId();
-        const empName = punch.name || `Employee ${uId}`;
-        const newEmp = {
-          id: empId,
-          deviceId: device.id || deviceId,
-          name: empName,
-          employeeCode: `EMP-${uId}`,
-          deviceUserId: uId,
-          department: 'Operations',
-          designation: 'Staff Member',
-          status: 'ACTIVE',
-          createdAt: now,
-          updatedAt: now,
-        };
-        await employees.insertOne(newEmp);
-        emp = newEmp;
-      }
 
       // Check for duplicate punch
       const existing = await attendanceEvents.findOne({
@@ -108,7 +89,7 @@ export async function POST(req: NextRequest) {
         await attendanceEvents.insertOne({
           id: eventId,
           deviceId: device.id || deviceId,
-          employeeId: emp.id || emp._id?.toString(),
+          employeeId: emp ? String(emp.id || emp._id) : null,
           deviceUserId: uId,
           timestamp: timestampIso,
           eventType: punch.eventType || eventType,

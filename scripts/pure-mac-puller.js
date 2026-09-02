@@ -87,12 +87,7 @@ function pullFromDeviceNativeMac(ip = '192.168.29.83', port = 5005) {
     let serialNumber = '';
     const logs = [];
     let logCount = 0;
-    let users = {
-      '1': 'hemanth',
-      '2': 'karthik',
-      '3': 'test',
-      '6': 'shanmukh nath',
-    };
+    let users = {};
 
     socket.setTimeout(8000);
 

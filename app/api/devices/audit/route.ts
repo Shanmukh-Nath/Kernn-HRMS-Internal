@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession, hasPermission } from '@/lib/auth';
-import { hardwareAuditLogsCol, generateId } from '@/lib/mongodb';
+import { hardwareAuditLogsCol, employeesCol, generateId } from '@/lib/mongodb';
 
 export const dynamic = 'force-dynamic';
 

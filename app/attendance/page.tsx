@@ -94,12 +94,6 @@ export default function AttendancePage() {
 
   useEffect(() => {
     fetchAttendance();
-
-    const interval = setInterval(() => {
-      fetchAttendance();
-    }, 4000);
-
-    return () => clearInterval(interval);
   }, [page, eventType, verificationType, startDate, endDate, search]);
 
   useEffect(() => {
@@ -114,14 +108,13 @@ export default function AttendancePage() {
       .catch(() => {});
 
     // Fetch Employees list for manual logging
-    fetch('/api/employees')
+    fetch('/api/employees?limit=200')
       .then((r) => r.json())
       .then((d) => {
-        if (d.success && Array.isArray(d.data)) {
-          setEmployeesList(d.data);
-          if (d.data.length > 0) {
-            setManualEmployeeId(d.data[0].id);
-          }
+        const list = d.data?.employees || d.data || [];
+        if (Array.isArray(list) && list.length > 0) {
+          setEmployeesList(list);
+          setManualEmployeeId(list[0].id || list[0]._id);
         }
       })
       .catch(() => {});
@@ -130,11 +123,13 @@ export default function AttendancePage() {
     fetch('/api/devices')
       .then((r) => r.json())
       .then((d) => {
-        if (d.success && d.data.length > 0) {
-          setDevices(d.data);
-          setImportDeviceId(d.data[0].id);
+        const list = d.data?.devices || d.data || [];
+        if (Array.isArray(list)) {
+          setDevices(list);
+          if (list.length > 0) setImportDeviceId(list[0].id || list[0].deviceId);
         }
-      });
+      })
+      .catch(() => {});
   }, []);
 
   const handleManualSubmit = async (e: React.FormEvent) => {

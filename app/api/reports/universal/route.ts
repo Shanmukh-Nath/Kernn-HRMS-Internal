@@ -365,10 +365,15 @@ export async function GET(req: NextRequest) {
 
       const groupedMap = new Map<string, any>();
       for (const ev of rawEvents) {
-        const parsedDate = safeParseDate(ev.timestamp);
-        const dStr = format(parsedDate, 'yyyy-MM-dd');
+        const parsedDate = parseAppDate(ev.timestamp);
+        const dStr = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Kolkata',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(parsedDate);
         const key = `${dStr}_${ev.deviceUserId}`;
-        const emp = (ev.employeeId && empById.get(ev.employeeId)) || empByDeviceUserId.get(ev.deviceUserId);
+        const emp = (ev.employeeId && empById.get(String(ev.employeeId))) || (ev.deviceUserId && empByDeviceUserId.get(String(ev.deviceUserId)));
 
         if (!groupedMap.has(key)) {
           groupedMap.set(key, {
