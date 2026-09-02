@@ -228,25 +228,42 @@ export function calculateDailyAttendance(
     minutesOvertime = Math.max(0, Math.round((lastPunchDate.getTime() - shiftEnd.getTime()) / (1000 * 60)));
   }
 
-  // Intermediary Breaks (Go Out & Return Pairing)
+  // Filter and debounce punches to eliminate rapid duplicate machine reads (< 5 mins)
+  const debouncedPunches: RawPunch[] = [];
+  for (const p of sortedPunches) {
+    const pDate = parseAppDate(p.timestamp);
+    if (debouncedPunches.length === 0) {
+      debouncedPunches.push(p);
+    } else {
+      const lastP = debouncedPunches[debouncedPunches.length - 1];
+      const lastPDate = parseAppDate(lastP.timestamp);
+      const diffMins = (pDate.getTime() - lastPDate.getTime()) / (1000 * 60);
+      if (diffMins >= (rule.debounceMinutes || 5)) {
+        debouncedPunches.push(p);
+      }
+    }
+  }
+
+  // Intermediary Breaks: detect distinct departure & return intervals (gap >= 15 mins)
   const breaks: BreakInterval[] = [];
-  const midPunches = sortedPunches.slice(1, sortedPunches.length - 1);
-
-  for (let i = 0; i < midPunches.length; i += 2) {
-    const outP = midPunches[i];
-    const retP = midPunches[i + 1];
-
-    if (outP && retP) {
-      const outDate = parseAppDate(outP.timestamp);
-      const retDate = parseAppDate(retP.timestamp);
-      const dur = Math.max(0, Math.round((retDate.getTime() - outDate.getTime()) / (1000 * 60)));
-      breaks.push({
-        goOutTime: formatAppTime12(outDate),
-        returnTime: formatAppTime12(retDate),
-        durationMinutes: dur,
-        outVerification: outP.verificationType,
-        returnVerification: retP.verificationType,
-      });
+  if (debouncedPunches.length >= 3) {
+    for (let i = 1; i < debouncedPunches.length - 1; i += 2) {
+      const outP = debouncedPunches[i];
+      const retP = debouncedPunches[i + 1];
+      if (outP && retP) {
+        const outDate = parseAppDate(outP.timestamp);
+        const retDate = parseAppDate(retP.timestamp);
+        const dur = Math.max(0, Math.round((retDate.getTime() - outDate.getTime()) / (1000 * 60)));
+        if (dur >= 15) {
+          breaks.push({
+            goOutTime: formatAppTime12(outDate),
+            returnTime: formatAppTime12(retDate),
+            durationMinutes: dur,
+            outVerification: outP.verificationType,
+            returnVerification: retP.verificationType,
+          });
+        }
+      }
     }
   }
 

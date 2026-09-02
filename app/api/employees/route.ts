@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
 
     let mappedEmployees = empList.map((emp: any) => {
       const user = userByEmpId.get(emp.id);
-      const userRole = user?.roleId ? roleById.get(user.roleId) : null;
+      const userRole = user?.roleId ? roleById.get(user.roleId) : (user?.role ? roleById.get(user.role) : null);
       const struct = emp.salaryStructureId ? structById.get(emp.salaryStructureId) : null;
       const manager = emp.managerId ? empById.get(emp.managerId) : null;
 
@@ -106,8 +106,8 @@ export async function GET(req: NextRequest) {
         id: emp.id || emp._id?.toString(),
         userId: user?.id || user?._id?.toString() || null,
         userMobile: user?.mobileNumber || null,
-        roleId: user?.roleId || null,
-        roleName: userRole?.name || 'EMPLOYEE',
+        roleId: user?.roleId || userRole?.id || null,
+        roleName: user?.role || userRole?.name || 'EMPLOYEE',
         salaryStructureName: struct?.name || null,
         managerName: manager?.name || null,
         qualifications,
@@ -138,8 +138,6 @@ export async function GET(req: NextRequest) {
           id: s.id,
           name: s.name,
           baseSalaryAmount: s.baseSalaryAmount,
-          ctcMinimum: s.ctcMinimum,
-          ctcMaximum: s.ctcMaximum,
         })),
         managers: activeManagers,
       },
@@ -154,7 +152,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getAuthSession();
+    const session = await getAuthSession(req);
     if (session && !hasPermission(session, 'employees:create')) {
       return NextResponse.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'You do not have permission to create employees' } },
@@ -187,7 +185,14 @@ export async function POST(req: NextRequest) {
     const deviceId = body.deviceId || dev?.id || dev?.deviceId || 'default_device';
 
     let roleId = body.roleId;
-    if (!roleId) {
+    let roleName = 'EMPLOYEE';
+    if (roleId) {
+      const rObj = await roles.findOne({ $or: [{ id: roleId }, { name: roleId }] });
+      if (rObj) {
+        roleId = rObj.id;
+        roleName = rObj.name;
+      }
+    } else {
       const defaultRole = await roles.findOne({ name: 'EMPLOYEE' });
       roleId = defaultRole?.id || 'role_employee';
     }
@@ -195,15 +200,15 @@ export async function POST(req: NextRequest) {
     let deviceUserId = body.deviceUserId ? String(body.deviceUserId) : '';
     if (!deviceUserId) {
       const allEmps = await employees.find({}).toArray();
-      const maxId = allEmps.reduce((max, e) => Math.max(max, parseInt(e.deviceUserId, 10) || 0), 100);
+      const maxId = allEmps.reduce((max, e) => Math.max(max, parseInt(e.deviceUserId, 10) || 0), 0);
       deviceUserId = String(maxId + 1);
     }
 
-    const employeeCode = body.employeeCode || `EMP-${deviceUserId}`;
-    const baseSalary = Number(body.baseSalary) || 30000;
-    const ctcAmount = Number(body.ctcAmount) || baseSalary * 12;
-    const hra = Number(body.hra) || Math.round(baseSalary * 0.4);
-    const allowances = Number(body.allowances) || Math.round(baseSalary * 0.2);
+    const employeeCode = body.employeeCode || `EMP-${deviceUserId.padStart(3, '0')}`;
+    const baseSalary = body.baseSalary !== undefined && body.baseSalary !== '' ? Number(body.baseSalary) : null;
+    const ctcAmount = body.ctcAmount !== undefined && body.ctcAmount !== '' ? Number(body.ctcAmount) : (baseSalary ? baseSalary * 12 : null);
+    const hra = body.hra !== undefined && body.hra !== '' ? Number(body.hra) : (baseSalary ? Math.round(baseSalary * 0.4) : null);
+    const allowances = body.allowances !== undefined && body.allowances !== '' ? Number(body.allowances) : (baseSalary ? Math.round(baseSalary * 0.2) : null);
 
     const qualificationsJson = JSON.stringify(body.qualifications || []);
     const experienceJson = JSON.stringify(body.experience || []);
@@ -216,8 +221,8 @@ export async function POST(req: NextRequest) {
       name: body.name,
       mobileNumber: body.mobileNumber,
       email: body.email || `${body.name.replace(/\s+/g, '').toLowerCase()}@company.com`,
-      department: body.department || 'Engineering',
-      designation: body.designation || 'Associate',
+      department: body.department || 'Operations',
+      designation: body.designation || 'Staff Member',
       status: body.status || 'ACTIVE',
       dateOfJoining: body.dateOfJoining ? new Date(body.dateOfJoining) : now,
       dateOfBirth: body.dateOfBirth ? new Date(body.dateOfBirth) : null,
@@ -238,7 +243,7 @@ export async function POST(req: NextRequest) {
       workShift: body.workShift || 'Day',
       expectedWorkHours: Number(body.expectedWorkHours) || 8.0,
       managerId: body.managerId || null,
-      salaryStructureId: body.salaryStructureId || 'struct_fte_standard',
+      salaryStructureId: body.salaryStructureId || null,
       baseSalary,
       ctcAmount,
       hra,
@@ -255,33 +260,32 @@ export async function POST(req: NextRequest) {
 
     const userDoc = {
       id: userId,
-      mobileNumber: body.mobileNumber,
-      passwordHash,
+      employeeId,
       name: body.name,
-      email: body.email || null,
+      mobileNumber: body.mobileNumber,
+      email: body.email || `${body.name.replace(/\s+/g, '').toLowerCase()}@company.com`,
+      passwordHash,
+      roleId,
+      role: roleName,
       mustChangePassword: true,
       status: 'ACTIVE',
-      roleId,
-      employeeId,
       createdAt: now,
       updatedAt: now,
     };
 
     await users.insertOne(userDoc);
 
-    const allLeaveTypes = await leaveTypes.find({}).toArray();
-    for (const lt of allLeaveTypes) {
-      const quota = Number(lt.defaultDaysPerYear ?? lt.daysPerYear) || 12;
+    const defaultLeaves = await leaveTypes.find({}).toArray();
+    for (const lt of defaultLeaves) {
       await leaveBalances.insertOne({
         id: generateId(),
         employeeId,
-        leaveTypeId: lt.id || lt.code,
-        year: 2026,
-        allocated: quota,
-        accrued: quota,
-        used: 0,
-        pending: 0,
-        balance: quota,
+        leaveTypeId: lt.id,
+        year: now.getFullYear(),
+        allocatedDays: lt.daysAllowed || 12,
+        usedDays: 0,
+        pendingDays: 0,
+        createdAt: now,
         updatedAt: now,
       });
     }
@@ -294,6 +298,7 @@ export async function POST(req: NextRequest) {
         name: body.name,
         mobileNumber: body.mobileNumber,
         employeeCode,
+        deviceUserId,
         temporaryPassword: tempPassword,
       },
       message: 'Employee and user login created successfully',
@@ -308,7 +313,7 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
-    const session = await getAuthSession();
+    const session = await getAuthSession(req);
     if (session && !hasPermission(session, 'employees:update')) {
       return NextResponse.json(
         { success: false, error: { code: 'FORBIDDEN', message: 'You do not have permission to update employee profiles' } },
@@ -326,12 +331,13 @@ export async function PUT(req: NextRequest) {
 
     const employees = await employeesCol();
     const users = await usersCol();
+    const roles = await rolesCol();
     const now = new Date();
 
-    const baseSalary = Number(body.baseSalary) || 30000;
-    const ctcAmount = Number(body.ctcAmount) || baseSalary * 12;
-    const hra = Number(body.hra) || Math.round(baseSalary * 0.4);
-    const allowances = Number(body.allowances) || Math.round(baseSalary * 0.2);
+    const baseSalary = body.baseSalary !== undefined && body.baseSalary !== '' ? Number(body.baseSalary) : null;
+    const ctcAmount = body.ctcAmount !== undefined && body.ctcAmount !== '' ? Number(body.ctcAmount) : (baseSalary ? baseSalary * 12 : null);
+    const hra = body.hra !== undefined && body.hra !== '' ? Number(body.hra) : (baseSalary ? Math.round(baseSalary * 0.4) : null);
+    const allowances = body.allowances !== undefined && body.allowances !== '' ? Number(body.allowances) : (baseSalary ? Math.round(baseSalary * 0.2) : null);
     const qualificationsJson = JSON.stringify(body.qualifications || []);
     const experienceJson = JSON.stringify(body.experience || []);
 
@@ -340,6 +346,7 @@ export async function PUT(req: NextRequest) {
       mobileNumber: body.mobileNumber,
       email: body.email || null,
       employeeCode: body.employeeCode,
+      deviceUserId: body.deviceUserId ? String(body.deviceUserId) : null,
       department: body.department,
       designation: body.designation,
       status: body.status || 'ACTIVE',
@@ -384,7 +391,15 @@ export async function PUT(req: NextRequest) {
       mobileNumber: body.mobileNumber,
       updatedAt: now,
     };
-    if (body.roleId) userUpdates.roleId = body.roleId;
+    if (body.roleId) {
+      const rObj = await roles.findOne({ $or: [{ id: body.roleId }, { name: body.roleId }] });
+      if (rObj) {
+        userUpdates.roleId = rObj.id;
+        userUpdates.role = rObj.name;
+      } else {
+        userUpdates.roleId = body.roleId;
+      }
+    }
 
     await users.updateOne({ employeeId: body.id }, { $set: userUpdates });
 

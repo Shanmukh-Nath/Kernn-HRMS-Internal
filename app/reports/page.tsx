@@ -923,9 +923,35 @@ export default function UniversalReportsPage() {
               </button>
             </div>
 
+            {selectedRecord.breaks && selectedRecord.breaks.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-amber-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <Coffee className="w-3.5 h-3.5 text-amber-600" />
+                  Break Intervals & Timestamps:
+                </h4>
+                <div className="divide-y divide-amber-100 border border-amber-200 bg-amber-50/40 rounded-2xl overflow-hidden text-xs">
+                  {selectedRecord.breaks.map((b: any, bIdx: number) => (
+                    <div key={bIdx} className="p-3 flex items-center justify-between">
+                      <div>
+                        <div className="font-bold text-slate-900 font-mono">
+                          {b.goOutTime} → {b.returnTime}
+                        </div>
+                        <div className="text-[10px] text-slate-500 font-medium">
+                          Out ({b.outVerification || 'BIOMETRIC'}) • Return ({b.returnVerification || 'BIOMETRIC'})
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-md text-[11px] font-bold font-mono bg-amber-100 text-amber-900 border border-amber-200">
+                        {b.durationMinutes} mins
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-3">
               <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Punch Sequence:</h4>
-              <div className="divide-y divide-slate-100 border border-slate-100 rounded-2xl overflow-hidden text-xs">
+              <div className="divide-y divide-slate-100 border border-slate-100 rounded-2xl overflow-hidden text-xs max-h-48 overflow-y-auto">
                 {selectedRecord.punches?.map((p: any, idx: number) => (
                   <div key={idx} className="p-3 flex items-center justify-between bg-white hover:bg-slate-50">
                     <div className="flex items-center gap-2.5">
@@ -934,7 +960,7 @@ export default function UniversalReportsPage() {
                       </span>
                       <div>
                         <div className="font-bold text-slate-900 font-mono">
-                          {format(new Date(p.timestamp), 'hh:mm:ss a')}
+                          {p.timestamp?.includes(' ') || p.timestamp?.includes('T') ? p.timestamp.slice(11, 19) : p.timestamp}
                         </div>
                         <div className="text-[10px] text-slate-400 font-mono">{p.terminalName || 'LAN Terminal'}</div>
                       </div>
@@ -954,7 +980,7 @@ export default function UniversalReportsPage() {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Break Duration:</span>
-                <span className="font-bold font-mono text-slate-900">{selectedRecord.totalBreakMinutes} Minutes</span>
+                <span className="font-bold font-mono text-slate-900">{selectedRecord.totalBreakMinutes || 0} Minutes</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Daily Attendance Status:</span>

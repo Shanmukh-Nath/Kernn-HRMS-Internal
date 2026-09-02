@@ -91,6 +91,20 @@ export default function EmployeesPage() {
   // View Profile Modal
   const [viewingEmployee, setViewingEmployee] = useState<any | null>(null);
 
+  // Toast notification state
+  const [toast, setToast] = useState<{ show: boolean; message: string; type: 'success' | 'error' }>({
+    show: false,
+    message: '',
+    type: 'success',
+  });
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ show: true, message, type });
+    setTimeout(() => {
+      setToast({ show: false, message: '', type: 'success' });
+    }, 4000);
+  };
+
   // Form State matching all 6 enterprise architecture modules
   const defaultEmployeeForm = {
     id: '',
@@ -98,51 +112,49 @@ export default function EmployeesPage() {
     name: '',
     employeeCode: '',
     department: 'Engineering',
-    designation: 'Software Engineer',
+    designation: 'Staff Member',
     status: 'ACTIVE',
     deviceUserId: '',
-    deviceId: '',
 
     // Module 2: Personal Details
     dateOfBirth: '',
     gender: 'Male',
-    bloodGroup: 'O+',
+    bloodGroup: '',
     maritalStatus: 'Single',
     aadhaarNumber: '',
     panNumber: '',
-    address: '',
     emergencyContactName: '',
     emergencyContactPhone: '',
-    emergencyContactRelation: 'Spouse',
+    emergencyContactRelation: '',
 
-    // Module 3: Professional & Employment Details
-    dateOfJoining: new Date().toISOString().split('T')[0],
+    // Module 3: Professional Details
+    dateOfJoining: '',
+    mobileNumber: '',
+    email: '',
+    address: '',
     probationPeriod: 6,
     workShift: 'Day',
     expectedWorkHours: 8.0,
     managerId: '',
-    mobileNumber: '',
-    email: '',
-    cardNumber: '',
 
     // Module 4: Qualifications & Experience
     qualifications: [
-      { degree: 'B.Tech / B.E.', institution: 'State Technical University', year: '2023', score: '8.4 CGPA' },
+      { degree: 'B.Tech / Bachelor', institute: '', year: 2022, score: '8.0 CGPA' },
     ],
     experience: [
-      { company: 'Tech Innovators Corp', designation: 'Junior Developer', from: '2023', to: '2025', years: 2 },
+      { company: '', designation: '', fromYear: 2022, toYear: 2024, description: '' },
     ],
 
     // Module 5: Role Assignment
     roleId: '',
 
-    // Module 6: Payroll Details & Salary Structure
+    // Module 6: Payroll & Salary Structure
     salaryStructureId: '',
-    baseSalary: 35000,
-    ctcAmount: 420000,
-    hra: 14000,
-    allowances: 7000,
-    bankName: 'HDFC Bank',
+    baseSalary: '',
+    ctcAmount: '',
+    hra: '',
+    allowances: '',
+    bankName: '',
     bankAccountNo: '',
     bankIfsc: '',
     accountHolderName: '',
@@ -157,27 +169,26 @@ export default function EmployeesPage() {
   const fetchEmployees = async () => {
     setLoading(true);
     try {
-      const [meRes, empRes] = await Promise.all([
-        fetch('/api/auth/me'),
-        fetch(`/api/employees?search=${encodeURIComponent(search)}&department=${department}&role=${roleFilter}&status=${statusFilter}`),
-      ]);
+      const q = new URLSearchParams();
+      if (search) q.append('search', search);
+      if (department) q.append('department', department);
+      if (roleFilter) q.append('role', roleFilter);
+      if (statusFilter) q.append('status', statusFilter);
 
-      const meJson = await meRes.json();
-      const empJson = await empRes.json();
-
-      if (meJson.success) setCurrentUser(meJson.data.user);
-      if (empJson.success) {
-        setEmployees(empJson.data || []);
-        if (empJson.lookups) {
-          setLookups(empJson.lookups);
-          if (empJson.lookups.roles?.length > 0 && !form.roleId) {
-            const empRole = empJson.lookups.roles.find((r: any) => r.name === 'EMPLOYEE');
-            if (empRole) setForm((prev: any) => ({ ...prev, roleId: empRole.id }));
-          }
-          if (empJson.lookups.salaryStructures?.length > 0 && !form.salaryStructureId) {
-            setForm((prev: any) => ({ ...prev, salaryStructureId: empJson.lookups.salaryStructures[0].id }));
-          }
+      const res = await fetch(`/api/employees?${q.toString()}`);
+      const json = await res.json();
+      if (json.success) {
+        setEmployees(json.data || []);
+        if (json.lookups) {
+          setLookups(json.lookups);
         }
+      }
+
+      // Fetch active session
+      const meRes = await fetch('/api/auth/me');
+      const meJson = await meRes.json();
+      if (meJson.success) {
+        setCurrentUser(meJson.data);
       }
     } catch (err) {
       console.error(err);
@@ -224,13 +235,16 @@ export default function EmployeesPage() {
   const handleOpenAddModal = () => {
     setIsEditing(false);
     const initialRoleId = lookups.roles.find((r: any) => r.name === 'EMPLOYEE')?.id || lookups.roles[0]?.id || '';
-    const initialStructureId = lookups.salaryStructures[0]?.id || 'struct_fte_standard';
 
     setForm({
       ...defaultEmployeeForm,
       roleId: initialRoleId,
-      salaryStructureId: initialStructureId,
-      deviceUserId: String(Math.floor(100 + Math.random() * 900)),
+      salaryStructureId: '',
+      baseSalary: '',
+      ctcAmount: '',
+      hra: '',
+      allowances: '',
+      deviceUserId: '',
     });
     setModalTab(1);
     setShowModal(true);
@@ -238,15 +252,17 @@ export default function EmployeesPage() {
 
   const handleOpenEditModal = (emp: any) => {
     setIsEditing(true);
+    const matchedRole = lookups.roles.find((r: any) => r.id === emp.roleId || r.name === emp.roleName);
     setForm({
       ...defaultEmployeeForm,
       ...emp,
+      deviceUserId: emp.deviceUserId || '',
       dateOfJoining: emp.dateOfJoining ? emp.dateOfJoining.split('T')[0] : '',
       dateOfBirth: emp.dateOfBirth ? emp.dateOfBirth.split('T')[0] : '',
       qualifications: emp.qualifications && emp.qualifications.length > 0 ? emp.qualifications : defaultEmployeeForm.qualifications,
       experience: emp.experience && emp.experience.length > 0 ? emp.experience : defaultEmployeeForm.experience,
-      roleId: emp.roleId || lookups.roles[0]?.id,
-      salaryStructureId: emp.salaryStructureId || lookups.salaryStructures[0]?.id,
+      roleId: matchedRole?.id || emp.roleId || lookups.roles[0]?.id || '',
+      salaryStructureId: emp.salaryStructureId || '',
     });
     setModalTab(1);
     setShowModal(true);
@@ -271,33 +287,32 @@ export default function EmployeesPage() {
         setShowModal(false);
         if (!isEditing && json.data?.temporaryPassword) {
           setCreatedCredentials(json.data);
-        } else {
-          alert(json.message || 'Employee profile saved successfully!');
         }
+        showToast(json.message || (isEditing ? 'Employee profile updated successfully!' : 'Employee onboarded successfully!'), 'success');
         fetchEmployees();
       } else {
-        alert(json.error?.message || 'Operation failed');
+        showToast(json.error?.message || 'Operation failed', 'error');
       }
     } catch {
-      alert('Network error saving employee details');
+      showToast('Network error saving employee details', 'error');
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleDeleteEmployee = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to permanently delete employee '${name}'?\n\nThis will remove their profile, user login account, biometric enrollments, and balances.`)) return;
+    if (!confirm(`Are you sure you want to delete employee '${name}'?`)) return;
     try {
       const res = await fetch(`/api/employees?id=${id}`, { method: 'DELETE' });
       const json = await res.json();
       if (json.success) {
-        alert(json.message || 'Employee removed successfully');
+        showToast(json.message || 'Employee removed successfully', 'success');
         fetchEmployees();
       } else {
-        alert(json.error?.message || 'Failed to delete');
+        showToast(json.error?.message || 'Failed to delete', 'error');
       }
     } catch {
-      alert('Network error deleting employee');
+      showToast('Network error deleting employee', 'error');
     }
   };
 
@@ -412,7 +427,33 @@ export default function EmployeesPage() {
   const canManage = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'HR_ADMIN' || currentUser?.permissions?.includes('employees:create');
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+    <div className="space-y-6 max-w-7xl mx-auto pb-12 relative">
+      {/* Toast Notification */}
+      {toast.show && (
+        <div className="fixed top-6 right-6 z-50 animate-fadeIn">
+          <div
+            className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-xl text-xs font-bold border ${
+              toast.type === 'success'
+                ? 'bg-emerald-900/95 text-emerald-100 border-emerald-500/30'
+                : 'bg-rose-900/95 text-rose-100 border-rose-500/30'
+            }`}
+          >
+            {toast.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            )}
+            <span>{toast.message}</span>
+            <button
+              onClick={() => setToast({ show: false, message: '', type: 'success' })}
+              className="ml-2 text-slate-400 hover:text-white"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
         <div>
