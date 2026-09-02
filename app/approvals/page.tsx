@@ -541,6 +541,7 @@ export default function ApprovalsPage() {
               <input
                 type="date"
                 value={startDate}
+                max={format(new Date(), 'yyyy-MM-dd')}
                 onChange={(e) => {
                   setStartDate(e.target.value);
                   setDatePreset('CUSTOM');
@@ -552,6 +553,7 @@ export default function ApprovalsPage() {
               <input
                 type="date"
                 value={endDate}
+                max={format(new Date(), 'yyyy-MM-dd')}
                 onChange={(e) => {
                   setEndDate(e.target.value);
                   setDatePreset('CUSTOM');

@@ -358,6 +358,7 @@ export default function HardwareAuditPage() {
               <input
                 type="date"
                 value={startDate}
+                max={new Date().toISOString().split('T')[0]}
                 onChange={(e) => {
                   setStartDate(e.target.value);
                   setActiveDatePreset('ALL');
@@ -370,6 +371,7 @@ export default function HardwareAuditPage() {
               <input
                 type="date"
                 value={endDate}
+                max={new Date().toISOString().split('T')[0]}
                 onChange={(e) => {
                   setEndDate(e.target.value);
                   setActiveDatePreset('ALL');

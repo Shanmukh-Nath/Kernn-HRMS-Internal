@@ -8,6 +8,7 @@ import {
   leaveRequestsCol,
   leaveTypesCol,
   devicesCol,
+  attendanceRulesCol,
 } from '@/lib/mongodb';
 
 export const dynamic = 'force-dynamic';
@@ -57,6 +58,16 @@ export async function GET(req: NextRequest) {
 
     const devices = await devCol.find({}).toArray();
     const devMap = new Map(devices.map((d) => [String(d.id || d.deviceId), d.name || 'Terminal']));
+
+    // 2. Fetch Active Attendance Shift Rules
+    const attRuleCol = await attendanceRulesCol();
+    const activeRule = (await attRuleCol.findOne({ isDefault: true })) || (await attRuleCol.findOne({})) || {};
+    const shiftStartTime = activeRule?.shiftStartTime || '10:00';
+    const [shiftHourStr, shiftMinStr] = shiftStartTime.split(':');
+    const shiftStartHour = parseInt(shiftHourStr, 10) || 10;
+    const shiftStartMin = parseInt(shiftMinStr, 10) || 0;
+    const gracePeriodMinutes = Number(activeRule?.gracePeriodMinutes ?? 15);
+    const graceCutoffMinuteOfDay = shiftStartHour * 60 + shiftStartMin + gracePeriodMinutes;
 
     // Fetch all punches for this employee
     const rawEvents = await attCol
@@ -271,8 +282,9 @@ export async function GET(req: NextRequest) {
 
         const inHour = Number(timeParts.find((p) => p.type === 'hour')?.value || '0');
         const inMin = Number(timeParts.find((p) => p.type === 'minute')?.value || '0');
+        const checkInMinuteOfDay = inHour * 60 + inMin;
 
-        if (inHour > 9 || (inHour === 9 && inMin > 15)) {
+        if (checkInMinuteOfDay > graceCutoffMinuteOfDay) {
           status = 'LATE';
           statusLabel = 'Late Arrival';
           lateCount++;

@@ -534,6 +534,7 @@ export default function UniversalReportsPage() {
             <input
               type="date"
               value={startDate}
+              max={format(new Date(), 'yyyy-MM-dd')}
               onChange={(e) => setStartDate(e.target.value)}
               className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-800 bg-slate-50/60 focus:ring-2 focus:ring-[#a92427] focus:outline-none font-mono"
             />
@@ -541,6 +542,7 @@ export default function UniversalReportsPage() {
             <input
               type="date"
               value={endDate}
+              max={format(new Date(), 'yyyy-MM-dd')}
               onChange={(e) => setEndDate(e.target.value)}
               className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-800 bg-slate-50/60 focus:ring-2 focus:ring-[#a92427] focus:outline-none font-mono"
             />

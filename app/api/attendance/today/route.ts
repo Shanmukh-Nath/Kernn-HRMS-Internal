@@ -8,6 +8,7 @@ import {
   attendanceRegularizationsCol,
   leaveRequestsCol,
   leaveTypesCol,
+  attendanceRulesCol,
 } from '@/lib/mongodb';
 
 export const dynamic = 'force-dynamic';
@@ -134,8 +135,14 @@ export async function GET(req: NextRequest) {
     const notYetArrived: any[] = [];
 
     let lateCount = 0;
-    const SHIFT_START_HOUR = 9;
-    const SHIFT_START_MINUTE = 15;
+    const attRuleCol = await attendanceRulesCol();
+    const activeRule = (await attRuleCol.findOne({ isDefault: true })) || (await attRuleCol.findOne({})) || {};
+    const shiftStartTime = activeRule?.shiftStartTime || '10:00';
+    const [shiftHourStr, shiftMinStr] = shiftStartTime.split(':');
+    const shiftStartHour = parseInt(shiftHourStr, 10) || 10;
+    const shiftStartMin = parseInt(shiftMinStr, 10) || 0;
+    const gracePeriodMinutes = Number(activeRule?.gracePeriodMinutes ?? 15);
+    const graceCutoffMinuteOfDay = shiftStartHour * 60 + shiftStartMin + gracePeriodMinutes;
 
     for (const emp of filteredEmployees) {
       if (onLeaveSet.has(emp.id)) {
@@ -167,9 +174,10 @@ export async function GET(req: NextRequest) {
 
         const inHour = Number(timeParts.find((p) => p.type === 'hour')?.value || '0');
         const inMin = Number(timeParts.find((p) => p.type === 'minute')?.value || '0');
+        const checkInMinuteOfDay = inHour * 60 + inMin;
         const isLate = checkinMap[emp.id].isRegularized
           ? false
-          : (inHour > SHIFT_START_HOUR || (inHour === SHIFT_START_HOUR && inMin > SHIFT_START_MINUTE));
+          : checkInMinuteOfDay > graceCutoffMinuteOfDay;
         if (isLate) lateCount++;
 
         const hasCheckOut = Boolean(checkinMap[emp.id].lastOut && checkinMap[emp.id].lastOut !== checkinMap[emp.id].firstIn);

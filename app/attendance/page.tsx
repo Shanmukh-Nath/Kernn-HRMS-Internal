@@ -353,6 +353,7 @@ export default function AttendancePage() {
             <input
               type="date"
               value={startDate}
+              max={new Date().toISOString().split('T')[0]}
               onChange={(e) => {
                 setStartDate(e.target.value);
                 setPage(1);
@@ -363,6 +364,7 @@ export default function AttendancePage() {
             <input
               type="date"
               value={endDate}
+              max={new Date().toISOString().split('T')[0]}
               onChange={(e) => {
                 setEndDate(e.target.value);
                 setPage(1);

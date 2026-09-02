@@ -45,7 +45,9 @@ const MONTH_NAMES = [
   { value: 12, label: 'December' },
 ];
 
-const AVAILABLE_YEARS = [2024, 2025, 2026, 2027, 2028, 2029, 2030];
+const CURRENT_YEAR = new Date().getFullYear();
+const CURRENT_MONTH = new Date().getMonth() + 1;
+const AVAILABLE_YEARS = [2024, 2025, 2026].filter((y) => y <= CURRENT_YEAR);
 
 export default function DailyAttendancePage() {
   const [currentUser, setCurrentUser] = useState<any | null>(null);
@@ -55,9 +57,9 @@ export default function DailyAttendancePage() {
   const [loading, setLoading] = useState(true);
   const [ledgerLoading, setLedgerLoading] = useState(false);
 
-  // Month & Year Picker State (Dynamically defaults to current calendar month & year)
-  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
+  // Month & Year Picker State (Dynamically defaults to current calendar month & year, capped to current date)
+  const [selectedMonth, setSelectedMonth] = useState(() => CURRENT_MONTH);
+  const [selectedYear, setSelectedYear] = useState(() => CURRENT_YEAR);
 
   // Admin View States
   const [search, setSearch] = useState('');
@@ -162,7 +164,11 @@ export default function DailyAttendancePage() {
   };
 
   const handleNextMonth = () => {
+    if (selectedYear > CURRENT_YEAR || (selectedYear === CURRENT_YEAR && selectedMonth >= CURRENT_MONTH)) {
+      return;
+    }
     if (selectedMonth === 12) {
+      if (selectedYear + 1 > CURRENT_YEAR) return;
       setSelectedMonth(1);
       setSelectedYear((y) => y + 1);
     } else {
@@ -300,11 +306,14 @@ export default function DailyAttendancePage() {
                 onChange={(e) => setSelectedMonth(Number(e.target.value))}
                 className="px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-[#a92427]"
               >
-                {MONTH_NAMES.map((m) => (
-                  <option key={m.value} value={m.value}>
-                    {m.label}
-                  </option>
-                ))}
+                {MONTH_NAMES.map((m) => {
+                  const isFutureMonth = selectedYear === CURRENT_YEAR && m.value > CURRENT_MONTH;
+                  return (
+                    <option key={m.value} value={m.value} disabled={isFutureMonth}>
+                      {m.label} {isFutureMonth ? '(Upcoming)' : ''}
+                    </option>
+                  );
+                })}
               </select>
 
               <select
@@ -321,7 +330,8 @@ export default function DailyAttendancePage() {
 
               <button
                 onClick={handleNextMonth}
-                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
+                disabled={selectedYear >= CURRENT_YEAR && selectedMonth >= CURRENT_MONTH}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 transition"
                 title="Next Month"
               >
                 <ChevronRight className="w-4 h-4" />
