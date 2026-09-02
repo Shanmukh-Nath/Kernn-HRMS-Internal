@@ -77,7 +77,10 @@ export async function GET(req: NextRequest) {
 
     const regByDate = new Map<string, any>();
     regularizations.forEach((r) => {
-      regByDate.set(r.date, r);
+      const existing = regByDate.get(r.date);
+      if (!existing || r.status === 'APPROVED' || (existing.status !== 'APPROVED' && r.status === 'PENDING')) {
+        regByDate.set(r.date, r);
+      }
     });
 
     // Fetch approved leaves
@@ -92,7 +95,12 @@ export async function GET(req: NextRequest) {
     const eventsByDate = new Map<string, any[]>();
     for (const ev of rawEvents) {
       const d = parseAppDate(ev.timestamp);
-      const istDate = formatAppDate(d);
+      const istDate = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Kolkata',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(d);
       if (!eventsByDate.has(istDate)) {
         eventsByDate.set(istDate, []);
       }
@@ -111,7 +119,7 @@ export async function GET(req: NextRequest) {
         const dStr = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         sortedDates.push(dStr);
       }
-      // Sort descending (latest date first) or ascending
+      // Sort descending (latest date first)
       sortedDates.sort((a, b) => b.localeCompare(a));
     } else {
       const allDatesSet = new Set<string>([
