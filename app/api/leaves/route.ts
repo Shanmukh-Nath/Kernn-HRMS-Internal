@@ -127,6 +127,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (new Date(body.endDate) < new Date(body.startDate)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: { code: 'INVALID_DATE_RANGE', message: 'End date must be the same as or after the start date.' },
+        },
+        { status: 400 }
+      );
+    }
+
     const ltCol = await leaveTypesCol();
     const empCol = await employeesCol();
     const attRuleCol = await attendanceRulesCol();

@@ -333,6 +333,8 @@ function LeavesContent() {
     try {
       const s = new Date(applyForm.startDate);
       const e = new Date(applyForm.endDate);
+      if (isNaN(s.getTime()) || isNaN(e.getTime())) return 1;
+      if (e < s) return 0;
       const days = differenceInCalendarDays(e, s) + 1;
       return days > 0 ? days : 1;
     } catch {
@@ -434,6 +436,12 @@ function LeavesContent() {
     setSubmitting(true);
     setErrorMsg(null);
     setSuccessMsg(null);
+
+    if (applyForm.endDate < applyForm.startDate) {
+      setErrorMsg('End date cannot be earlier than start date. Please select a valid duration.');
+      setSubmitting(false);
+      return;
+    }
 
     if (isProofRequired && !uploadedDoc) {
       setErrorMsg(`Policy Mandate: A valid certificate/document is required for ${selectedType?.name}. Please upload the requested file.`);
@@ -2199,22 +2207,35 @@ function LeavesContent() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Start Date</label>
+                  <label className="block font-bold text-slate-700 mb-1">Start Date *</label>
                   <input
                     type="date"
                     value={applyForm.startDate}
-                    onChange={(e) => setApplyForm({ ...applyForm, startDate: e.target.value })}
+                    onChange={(e) => {
+                      const newStart = e.target.value;
+                      setApplyForm((prev) => ({
+                        ...prev,
+                        startDate: newStart,
+                        endDate: prev.endDate < newStart ? newStart : prev.endDate,
+                      }));
+                    }}
                     required
                     className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono font-medium focus:outline-none focus:ring-2 focus:ring-[#a92427]"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">End Date</label>
+                  <label className="block font-bold text-slate-700 mb-1">End Date *</label>
                   <input
                     type="date"
                     value={applyForm.endDate}
-                    onChange={(e) => setApplyForm({ ...applyForm, endDate: e.target.value })}
+                    min={applyForm.startDate}
+                    onChange={(e) => {
+                      const newEnd = e.target.value;
+                      if (newEnd >= applyForm.startDate) {
+                        setApplyForm((prev) => ({ ...prev, endDate: newEnd }));
+                      }
+                    }}
                     required
                     className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono font-medium focus:outline-none focus:ring-2 focus:ring-[#a92427]"
                   />
