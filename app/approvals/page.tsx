@@ -44,6 +44,38 @@ export default function ApprovalsPage() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Date Range Filter States
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [datePreset, setDatePreset] = useState('ALL');
+
+  const handleDatePresetChange = (preset: string) => {
+    setDatePreset(preset);
+    const now = new Date();
+    if (preset === 'ALL') {
+      setStartDate('');
+      setEndDate('');
+    } else if (preset === 'TODAY') {
+      const today = format(now, 'yyyy-MM-dd');
+      setStartDate(today);
+      setEndDate(today);
+    } else if (preset === 'THIS_MONTH') {
+      const y = now.getFullYear();
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+      setStartDate(`${y}-${m}-01`);
+      setEndDate(`${y}-${m}-${lastDay}`);
+    } else if (preset === 'LAST_30_DAYS') {
+      const past30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      setStartDate(format(past30, 'yyyy-MM-dd'));
+      setEndDate(format(now, 'yyyy-MM-dd'));
+    } else if (preset === 'LAST_3_MONTHS') {
+      const past90 = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      setStartDate(format(past90, 'yyyy-MM-dd'));
+      setEndDate(format(now, 'yyyy-MM-dd'));
+    }
+  };
+
   const fetchAllApprovals = async () => {
     setLoading(true);
     try {
@@ -261,6 +293,18 @@ export default function ApprovalsPage() {
   const pendingPayslipsCount = payslips.filter((r) => r.status === 'PENDING').length;
   const totalPendingCount = pendingLeavesCount + pendingRegsCount + pendingPayslipsCount;
 
+  // Item date extractor
+  const getItemDate = (item: any) => {
+    if (item.date) return item.date;
+    if (item.startDate) return item.startDate.split('T')[0];
+    if (item.createdAt) {
+      try {
+        return new Date(item.createdAt).toISOString().split('T')[0];
+      } catch {}
+    }
+    return '';
+  };
+
   // Filter unified items
   const filteredAllItems = allItems.filter((item) => {
     const matchesSearch =
@@ -271,7 +315,10 @@ export default function ApprovalsPage() {
       item.title.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesStatus = statusFilter === 'ALL' || item.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const dStr = getItemDate(item);
+    const matchesDate = (!startDate || (dStr && dStr >= startDate)) && (!endDate || (dStr && dStr <= endDate));
+
+    return matchesSearch && matchesStatus && matchesDate;
   });
 
   const isSupervisor = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'HR_ADMIN' || currentUser?.role === 'MANAGER';
@@ -456,8 +503,9 @@ export default function ApprovalsPage() {
             </button>
           </div>
 
-          {/* Search & Status Filter */}
-          <div className="flex items-center gap-2">
+          {/* Search, Date Range & Status Filter Toolbar */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Search Input */}
             <div className="relative">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -469,10 +517,64 @@ export default function ApprovalsPage() {
               />
             </div>
 
+            {/* Date Preset Dropdown */}
+            <select
+              value={datePreset}
+              onChange={(e) => handleDatePresetChange(e.target.value)}
+              className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#a92427]"
+            >
+              <option value="ALL">All Time</option>
+              <option value="TODAY">Today</option>
+              <option value="THIS_MONTH">This Month</option>
+              <option value="LAST_30_DAYS">Last 30 Days</option>
+              <option value="LAST_3_MONTHS">Last 3 Months</option>
+            </select>
+
+            {/* Date Pickers */}
+            <div className="flex items-center gap-1.5 bg-white px-2 py-1.5 rounded-xl border border-slate-200">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  setDatePreset('CUSTOM');
+                }}
+                className="text-xs font-mono bg-transparent text-slate-700 focus:outline-none"
+                title="From Date"
+              />
+              <span className="text-slate-400 text-xs">to</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  setDatePreset('CUSTOM');
+                }}
+                className="text-xs font-mono bg-transparent text-slate-700 focus:outline-none"
+                title="To Date"
+              />
+              {(startDate || endDate || searchQuery || statusFilter !== 'PENDING') && (
+                <button
+                  onClick={() => {
+                    setStartDate('');
+                    setEndDate('');
+                    setDatePreset('ALL');
+                    setSearchQuery('');
+                    setStatusFilter('PENDING');
+                  }}
+                  className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 transition"
+                  title="Reset Filters"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+
+            {/* Status Filter */}
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none"
+              className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#a92427]"
             >
               <option value="PENDING">Pending Sign-off</option>
               <option value="APPROVED">Approved</option>
@@ -652,7 +754,17 @@ export default function ApprovalsPage() {
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-xs">
                       {leaves
-                        .filter((r) => statusFilter === 'ALL' || r.status === statusFilter)
+                        .filter((r) => {
+                          const matchesStatus = statusFilter === 'ALL' || r.status === statusFilter;
+                          const dStr = getItemDate(r);
+                          const matchesDate = (!startDate || (dStr && dStr >= startDate)) && (!endDate || (dStr && dStr <= endDate));
+                          const matchesSearch =
+                            !searchQuery ||
+                            (r.employee?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            (r.employee?.employeeCode || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            (r.employee?.department || '').toLowerCase().includes(searchQuery.toLowerCase());
+                          return matchesStatus && matchesDate && matchesSearch;
+                        })
                         .map((r) => {
                           const isPending = r.status === 'PENDING';
                           return (
@@ -760,7 +872,17 @@ export default function ApprovalsPage() {
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-xs">
                       {regularizations
-                        .filter((r) => statusFilter === 'ALL' || r.status === statusFilter)
+                        .filter((r) => {
+                          const matchesStatus = statusFilter === 'ALL' || r.status === statusFilter;
+                          const dStr = getItemDate(r);
+                          const matchesDate = (!startDate || (dStr && dStr >= startDate)) && (!endDate || (dStr && dStr <= endDate));
+                          const matchesSearch =
+                            !searchQuery ||
+                            (r.employeeName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            (r.employeeCode || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            (r.department || '').toLowerCase().includes(searchQuery.toLowerCase());
+                          return matchesStatus && matchesDate && matchesSearch;
+                        })
                         .map((r) => {
                           const isPending = r.status === 'PENDING';
                           return (
@@ -861,7 +983,17 @@ export default function ApprovalsPage() {
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-xs">
                       {payslips
-                        .filter((p) => statusFilter === 'ALL' || p.status === statusFilter)
+                        .filter((p) => {
+                          const matchesStatus = statusFilter === 'ALL' || p.status === statusFilter;
+                          const dStr = getItemDate(p);
+                          const matchesDate = (!startDate || (dStr && dStr >= startDate)) && (!endDate || (dStr && dStr <= endDate));
+                          const matchesSearch =
+                            !searchQuery ||
+                            (p.employeeName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            (p.employeeCode || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                            (p.department || '').toLowerCase().includes(searchQuery.toLowerCase());
+                          return matchesStatus && matchesDate && matchesSearch;
+                        })
                         .map((p) => {
                           const isPending = p.status === 'PENDING';
                           return (
