@@ -619,44 +619,100 @@ function updatePushMeta() {
   if (bt) bt.disabled = n === 0;
 }
 
-function renderUsersTable(users) {
+function renderUsersTable(deviceUsers = []) {
   const tb = $('tbUsers');
   const tbFull = $('tbUsersFull');
   const badge = $('dkBadgeUsers');
   const navBadge = $('navBadgeUsers');
 
-  if (badge) badge.textContent = users.length;
-  if (navBadge) navBadge.textContent = users.length;
+  // Build merged map of Server Roster + On-Device detected IDs
+  const mergedMap = new Map();
 
-  if (!users.length) {
-    const emptyHtml = '<tr><td colspan="5" class="tbl-empty">No enrolled staff found on device memory.</td></tr>';
+  // 1. Add Server Enrolled Employees
+  const serverList = state.serverEmployees || [];
+  serverList.forEach((emp) => {
+    const uId = emp.deviceUserId || (emp.employeeCode ? emp.employeeCode.replace(/\D/g, '') : null);
+    if (uId) {
+      mergedMap.set(String(uId), {
+        userId: String(uId),
+        name: emp.name,
+        code: emp.employeeCode || `EMP-${uId}`,
+        department: emp.department || 'Operations',
+        isServer: true,
+        isDevice: false,
+        privilege: 0,
+      });
+    }
+  });
+
+  // 2. Mark / Add On-Device Detected IDs
+  (deviceUsers || []).forEach((u) => {
+    const uId = String(u.userId || u.id);
+    if (mergedMap.has(uId)) {
+      const existing = mergedMap.get(uId);
+      existing.isDevice = true;
+      if (u.privilege !== undefined) existing.privilege = u.privilege;
+    } else {
+      mergedMap.set(uId, {
+        userId: uId,
+        name: `Staff ${uId}`,
+        code: `DEV-${uId}`,
+        department: 'Hardware Terminal',
+        isServer: false,
+        isDevice: true,
+        privilege: u.privilege || 0,
+      });
+    }
+  });
+
+  const allMerged = Array.from(mergedMap.values()).sort((a, b) => Number(a.userId) - Number(b.userId));
+
+  if (badge) badge.textContent = allMerged.length;
+  if (navBadge) navBadge.textContent = allMerged.length;
+
+  if (!allMerged.length) {
+    const emptyHtml = '<tr><td colspan="5" class="tbl-empty">No enrolled staff found on server or terminal memory.</td></tr>';
     if (tb) tb.innerHTML = emptyHtml;
     if (tbFull) tbFull.innerHTML = emptyHtml;
     return;
   }
 
-  const rowsHtml = users.map((u) => `
-    <tr>
-      <td class="mono text-cyan" style="font-weight:700">#${escHtml(u.userId || u.id)}</td>
-      <td>
-        <div style="display:flex;align-items:center;gap:10px">
-          <div style="width:26px;min-width:26px;height:26px;border-radius:8px;background:rgba(34,211,238,0.14);border:1px solid rgba(34,211,238,0.25);color:var(--cyan);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0">
-            ${(u.name || u.userId || 'E')[0].toUpperCase()}
+  const rowsHtml = allMerged.map((u) => {
+    let enrollmentBadge = '';
+    if (u.isServer && u.isDevice) {
+      enrollmentBadge = '<span class="badge badge-green"><i data-lucide="check-circle-2" style="width:10px;height:10px"></i> Synced (Server & Device)</span>';
+    } else if (u.isServer) {
+      enrollmentBadge = '<span class="badge badge-blue"><i data-lucide="cloud" style="width:10px;height:10px"></i> Server Enrolled</span>';
+    } else {
+      enrollmentBadge = '<span class="badge badge-amber"><i data-lucide="hard-drive" style="width:10px;height:10px"></i> On-Device Only</span>';
+    }
+
+    return `
+      <tr>
+        <td class="mono text-cyan" style="font-weight:700">#${escHtml(u.userId)}</td>
+        <td>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:26px;min-width:26px;height:26px;border-radius:8px;background:${u.isServer ? 'rgba(34,211,238,0.14)' : 'rgba(245,158,11,0.14)'};border:1px solid ${u.isServer ? 'rgba(34,211,238,0.25)' : 'rgba(245,158,11,0.25)'};color:${u.isServer ? 'var(--cyan)' : '#f59e0b'};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0">
+              ${(u.name || 'S')[0].toUpperCase()}
+            </div>
+            <div>
+              <div style="font-weight:600;color:var(--text-1);font-size:12px">${escHtml(u.name)}</div>
+              <div style="font-size:10px;color:var(--text-3);font-family:var(--font-mono)">${escHtml(u.code)} • ${escHtml(u.department)}</div>
+            </div>
           </div>
-          <span style="font-weight:600;color:var(--text-1);font-size:12px">${escHtml(u.name || 'Enrolled User')}</span>
-        </div>
-      </td>
-      <td><span class="badge ${u.privilege > 0 ? 'badge-amber' : 'badge-dim'}">${u.privilege > 0 ? 'Terminal Admin' : 'Employee'}</span></td>
-      <td>
-        <div style="display:flex;gap:4px">
-          <span class="badge badge-blue">Fingerprint</span>
-          <span class="badge badge-violet">Face</span>
-          <span class="badge badge-green">RFID</span>
-        </div>
-      </td>
-      <td><span class="badge badge-green">ACTIVE</span></td>
-    </tr>
-  `).join('');
+        </td>
+        <td><span class="badge ${u.privilege > 0 ? 'badge-amber' : 'badge-dim'}">${u.privilege > 0 ? 'Terminal Admin' : 'Employee'}</span></td>
+        <td>
+          <div style="display:flex;gap:4px">
+            <span class="badge badge-blue">Fingerprint</span>
+            <span class="badge badge-violet">Face</span>
+            <span class="badge badge-green">RFID</span>
+          </div>
+        </td>
+        <td>${enrollmentBadge}</td>
+      </tr>
+    `;
+  }).join('');
 
   if (tb) tb.innerHTML = rowsHtml;
   if (tbFull) tbFull.innerHTML = rowsHtml;
@@ -756,10 +812,14 @@ async function getKnownUsers() {
       const json = await res.json();
       const list = json.data?.employees || json.data || [];
       if (Array.isArray(list)) {
+        state.serverEmployees = list;
         list.forEach((emp) => {
-          const uId = emp.deviceUserId || emp.employeeCode?.replace(/\D/g, '') || emp.id;
-          if (uId && emp.name) {
-            map[String(uId)] = emp.name;
+          if (emp.deviceUserId && emp.name) {
+            map[String(emp.deviceUserId)] = emp.name;
+          }
+          if (emp.employeeCode && emp.name) {
+            const numCode = emp.employeeCode.replace(/\D/g, '');
+            if (numCode) map[String(numCode)] = emp.name;
           }
         });
         localStorage.setItem('ksynbr_cached_staff', JSON.stringify(map));

@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { NextRequest } from 'next/server';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'secureye_hrms_super_secret_signing_key_2026';
@@ -100,10 +100,32 @@ export function verifySessionToken(token: string): AuthSession | null {
 }
 
 /**
- * Helper to get active session from server cookies
+ * Helper to get active session from Authorization header or server cookies
  */
-export async function getAuthSession(): Promise<AuthSession | null> {
+export async function getAuthSession(req?: NextRequest): Promise<AuthSession | null> {
   try {
+    // 1. Check req headers if passed
+    if (req) {
+      const authHeader = req.headers.get('authorization');
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        const session = verifySessionToken(token);
+        if (session) return session;
+      }
+    }
+
+    // 2. Check next/headers
+    try {
+      const headerStore = await headers();
+      const authHeader = headerStore.get('authorization');
+      if (authHeader?.startsWith('Bearer ')) {
+        const token = authHeader.substring(7);
+        const session = verifySessionToken(token);
+        if (session) return session;
+      }
+    } catch (_) {}
+
+    // 3. Check server cookies
     const cookieStore = await cookies();
     const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
     if (!token) return null;

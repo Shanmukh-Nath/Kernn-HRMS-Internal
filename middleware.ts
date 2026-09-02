@@ -25,15 +25,18 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
+  const authHeader = request.headers.get('authorization');
+  const bearerToken = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
+  const token = request.cookies.get(AUTH_COOKIE_NAME)?.value || bearerToken;
 
   // 2. If user is NOT logged in
   if (!token) {
-    // If already on /login, allow access
     if (pathname === '/login') {
       return NextResponse.next();
     }
-    // Block access to dashboard and all other pages -> redirect to /login
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } }, { status: 401 });
+    }
     const loginUrl = new URL('/login', request.url);
     return NextResponse.redirect(loginUrl);
   }
