@@ -255,15 +255,42 @@ export default function EmployeesPage() {
     setIsEditing(true);
     const matchedRole = lookups.roles.find((r: any) => r.id === emp.roleId || r.name === emp.roleName);
     setForm({
-      ...defaultEmployeeForm,
-      ...emp,
+      id: emp.id || '',
+      name: emp.name || '',
+      employeeCode: emp.employeeCode || '',
+      department: emp.department || 'Operations',
+      designation: emp.designation || 'Staff Member',
+      status: emp.status || 'ACTIVE',
       deviceUserId: emp.deviceUserId || '',
+      mobileNumber: emp.mobileNumber || emp.userMobile || '',
+      email: emp.email || '',
       dateOfJoining: emp.dateOfJoining ? emp.dateOfJoining.split('T')[0] : '',
       dateOfBirth: emp.dateOfBirth ? emp.dateOfBirth.split('T')[0] : '',
+      gender: emp.gender || 'Male',
+      bloodGroup: emp.bloodGroup || '',
+      maritalStatus: emp.maritalStatus || 'Single',
+      aadhaarNumber: emp.aadhaarNumber || '',
+      panNumber: emp.panNumber || '',
+      address: emp.address || '',
+      emergencyContactName: emp.emergencyContactName || '',
+      emergencyContactPhone: emp.emergencyContactPhone || '',
+      emergencyContactRelation: emp.emergencyContactRelation || '',
+      probationPeriod: emp.probationPeriod !== undefined && emp.probationPeriod !== null ? Number(emp.probationPeriod) : 6,
+      workShift: emp.workShift || 'Day',
+      expectedWorkHours: emp.expectedWorkHours !== undefined && emp.expectedWorkHours !== null ? Number(emp.expectedWorkHours) : 8.0,
+      managerId: emp.managerId || '',
+      salaryStructureId: emp.salaryStructureId || '',
+      baseSalary: emp.baseSalary !== undefined && emp.baseSalary !== null ? emp.baseSalary : '',
+      ctcAmount: emp.ctcAmount !== undefined && emp.ctcAmount !== null ? emp.ctcAmount : '',
+      hra: emp.hra !== undefined && emp.hra !== null ? emp.hra : '',
+      allowances: emp.allowances !== undefined && emp.allowances !== null ? emp.allowances : '',
+      bankName: emp.bankName || '',
+      bankAccountNo: emp.bankAccountNo || '',
+      bankIfsc: emp.bankIfsc || '',
+      accountHolderName: emp.accountHolderName || emp.name || '',
+      roleId: matchedRole?.id || emp.roleId || lookups.roles[0]?.id || '',
       qualifications: emp.qualifications && emp.qualifications.length > 0 ? emp.qualifications : defaultEmployeeForm.qualifications,
       experience: emp.experience && emp.experience.length > 0 ? emp.experience : defaultEmployeeForm.experience,
-      roleId: matchedRole?.id || emp.roleId || lookups.roles[0]?.id || '',
-      salaryStructureId: emp.salaryStructureId || '',
     });
     setModalTab(1);
     setShowModal(true);
@@ -861,11 +888,23 @@ export default function EmployeesPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Mobile Phone (Login) *</label>
+                      <input
+                        type="tel"
+                        value={form.mobileNumber || ''}
+                        onChange={(e) => setForm({ ...form, mobileNumber: e.target.value })}
+                        placeholder="10-digit Mobile"
+                        required
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono text-slate-900"
+                      />
+                    </div>
+
                     <div>
                       <label className="block font-bold text-slate-700 mb-1">Employment Status</label>
                       <select
-                        value={form.status}
+                        value={form.status || 'ACTIVE'}
                         onChange={(e) => setForm({ ...form, status: e.target.value })}
                         className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-semibold"
                       >
@@ -879,9 +918,9 @@ export default function EmployeesPage() {
                       <label className="block font-bold text-slate-700 mb-1">Biometric Terminal User ID</label>
                       <input
                         type="text"
-                        value={form.deviceUserId}
+                        value={form.deviceUserId || ''}
                         onChange={(e) => setForm({ ...form, deviceUserId: e.target.value })}
-                        placeholder="e.g. 101"
+                        placeholder="e.g. 6"
                         className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono"
                         title="Unique hardware biometric slot identifier"
                       />
@@ -1067,9 +1106,9 @@ export default function EmployeesPage() {
                     <div>
                       <label className="block font-bold text-slate-700 mb-1">Reporting Supervisor / Manager</label>
                       <select
-                        value={form.managerId}
+                        value={form.managerId || ''}
                         onChange={(e) => setForm({ ...form, managerId: e.target.value })}
-                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900"
                       >
                         <option value="">None (Reports to HR Admin / Super Admin)</option>
                         {lookups.managers
@@ -1087,7 +1126,7 @@ export default function EmployeesPage() {
                       <input
                         type="number"
                         step="0.5"
-                        value={form.expectedWorkHours}
+                        value={form.expectedWorkHours ?? 8.0}
                         onChange={(e) => setForm({ ...form, expectedWorkHours: Number(e.target.value) })}
                         className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono"
                       />
@@ -1099,7 +1138,7 @@ export default function EmployeesPage() {
                       <label className="block font-bold text-slate-700 mb-1">Official Mobile Number * (Login)</label>
                       <input
                         type="tel"
-                        value={form.mobileNumber}
+                        value={form.mobileNumber || ''}
                         onChange={(e) => setForm({ ...form, mobileNumber: e.target.value })}
                         placeholder="10-digit mobile number"
                         required
@@ -1111,7 +1150,7 @@ export default function EmployeesPage() {
                       <label className="block font-bold text-slate-700 mb-1">Corporate Work Email</label>
                       <input
                         type="email"
-                        value={form.email}
+                        value={form.email || ''}
                         onChange={(e) => setForm({ ...form, email: e.target.value })}
                         placeholder="name@company.com"
                         className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-medium text-slate-900"

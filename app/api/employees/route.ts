@@ -411,11 +411,13 @@ export async function PUT(req: NextRequest) {
 
     const userUpdates: Record<string, any> = {
       name: body.name,
-      email: body.email || null,
-      mobileNumber: body.mobileNumber,
       updatedAt: now,
       employeeId: body.id,
     };
+
+    if (body.email) userUpdates.email = body.email;
+    if (body.mobileNumber) userUpdates.mobileNumber = body.mobileNumber;
+
     if (body.roleId) {
       const rObj = await roles.findOne({ $or: [{ id: body.roleId }, { name: body.roleId }] });
       if (rObj) {
