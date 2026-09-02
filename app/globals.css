@@ -54,3 +54,72 @@ body {
 .pulse-live {
   animation: pulseGlow 2s infinite ease-in-out;
 }
+
+/* Biometric Laser Scanner Sweep */
+@keyframes laserSweep {
+  0% {
+    top: 0%;
+    opacity: 0.3;
+  }
+  50% {
+    top: 92%;
+    opacity: 1;
+  }
+  100% {
+    top: 0%;
+    opacity: 0.3;
+  }
+}
+
+.animate-laser-sweep {
+  animation: laserSweep 1.8s ease-in-out infinite;
+}
+
+/* Radar Rotating Sweep */
+@keyframes radarSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-radar-spin {
+  animation: radarSpin 3s linear infinite;
+}
+
+/* Hologram Shimmer */
+@keyframes hologramShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-hologram {
+  background: linear-gradient(90deg, rgba(169, 36, 39, 0.1) 0%, rgba(169, 36, 39, 0.3) 50%, rgba(169, 36, 39, 0.1) 100%);
+  background-size: 200% 100%;
+  animation: hologramShimmer 2.2s infinite linear;
+}
+
+/* Top Screen Laser Progress Bar */
+@keyframes topLaserStream {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-top-laser {
+  background: linear-gradient(90deg, #a92427, #f59e0b, #ec4899, #a92427);
+  background-size: 300% 300%;
+  animation: topLaserStream 2s ease infinite;
+}

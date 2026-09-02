@@ -1,6 +1,7 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { AppLayout } from '@/components/AppLayout';
+import { LoadingProvider } from '@/components/LoadingProvider';
 
 export const metadata: Metadata = {
   title: 'Kernn HRMS Suite | Kernn Automations',
@@ -18,7 +19,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased font-sans">
-        <AppLayout>{children}</AppLayout>
+        <LoadingProvider>
+          <AppLayout>{children}</AppLayout>
+        </LoadingProvider>
       </body>
     </html>
   );
