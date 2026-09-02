@@ -383,6 +383,24 @@ export async function PUT(req: NextRequest) {
       updatedAt: now,
     };
 
+    if (body.deviceUserId) {
+      // Free this deviceUserId from any other employee to prevent duplicate key errors
+      await employees.updateMany(
+        { id: { $ne: body.id }, deviceUserId: String(body.deviceUserId) },
+        { $set: { deviceUserId: null } }
+      );
+    }
+
+    if (body.roleId) {
+      const rObj = await roles.findOne({ $or: [{ id: body.roleId }, { name: body.roleId }] });
+      if (rObj) {
+        updateFields.roleId = rObj.id;
+        updateFields.roleName = rObj.name;
+      } else {
+        updateFields.roleId = body.roleId;
+      }
+    }
+
     if (body.dateOfJoining) updateFields.dateOfJoining = new Date(body.dateOfJoining);
     if (body.dateOfBirth) updateFields.dateOfBirth = new Date(body.dateOfBirth);
 
@@ -396,6 +414,7 @@ export async function PUT(req: NextRequest) {
       email: body.email || null,
       mobileNumber: body.mobileNumber,
       updatedAt: now,
+      employeeId: body.id,
     };
     if (body.roleId) {
       const rObj = await roles.findOne({ $or: [{ id: body.roleId }, { name: body.roleId }] });
@@ -407,11 +426,14 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    await users.updateOne({ employeeId: body.id }, { $set: userUpdates });
+    await users.updateOne(
+      { $or: [{ employeeId: body.id }, { mobileNumber: body.mobileNumber }, { email: body.email }] },
+      { $set: userUpdates }
+    );
 
     return NextResponse.json({
       success: true,
-      message: 'Employee profile updated successfully',
+      message: 'Employee profile and permissions updated successfully',
     });
   } catch (err: any) {
     return NextResponse.json(

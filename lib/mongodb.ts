@@ -1,5 +1,7 @@
 import dns from 'node:dns';
 import { MongoClient, Db, Collection } from 'mongodb';
+import dotenv from 'dotenv';
+dotenv.config();
 
 // Ensure DNS resolution handles SRV records properly on Windows
 try {
@@ -9,7 +11,7 @@ try {
 }
 
 
-const uri = process.env.MONGODB_URI || process.env.DATABASE_URL || "mongodb+srv://shanmukh733_db_user:[EMAIL_ADDRESS]/secureye_hrms?ssl=true&authSource=admin&retryWrites=true&w=majority&appName=HRMSProd";
+const uri = process.env.MONGODB_URI || process.env.DATABASE_URL || "mongodb://shanmukh733_db_user:AnI6iW5d3bdIsaSV@ac-grloq8u-shard-00-00.baj7suy.mongodb.net:27017,ac-grloq8u-shard-00-01.baj7suy.mongodb.net:27017,ac-grloq8u-shard-00-02.baj7suy.mongodb.net:27017/secureye_hrms?ssl=true&authSource=admin&retryWrites=true&w=majority&appName=HRMSProd";
 
 declare global {
   // eslint-disable-next-line no-var
