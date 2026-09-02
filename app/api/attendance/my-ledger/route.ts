@@ -107,7 +107,12 @@ export async function GET(req: NextRequest) {
       eventsByDate.get(istDate)!.push(ev);
     }
 
-    // Determine dates list to return
+    // Ensure all raw events within each day are sorted in strict chronological order
+    for (const [_, evList] of eventsByDate.entries()) {
+      evList.sort((a, b) => parseAppDate(a.timestamp).getTime() - parseAppDate(b.timestamp).getTime());
+    }
+
+    // Determine dates list to return (Starting dates on top: Day 1, Day 2, Day 3, ...)
     let sortedDates: string[] = [];
     const todayIst = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
@@ -119,15 +124,15 @@ export async function GET(req: NextRequest) {
         const dStr = `${y}-${String(m).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         sortedDates.push(dStr);
       }
-      // Sort descending (latest date first)
-      sortedDates.sort((a, b) => b.localeCompare(a));
+      // Sort ascending (starting dates on top)
+      sortedDates.sort((a, b) => a.localeCompare(b));
     } else {
       const allDatesSet = new Set<string>([
         ...Array.from(eventsByDate.keys()),
         ...Array.from(regByDate.keys()),
         todayIst,
       ]);
-      sortedDates = Array.from(allDatesSet).sort((a, b) => b.localeCompare(a));
+      sortedDates = Array.from(allDatesSet).sort((a, b) => a.localeCompare(b));
       if (startDateParam) sortedDates = sortedDates.filter((d) => d >= startDateParam);
       if (endDateParam) sortedDates = sortedDates.filter((d) => d <= endDateParam);
     }

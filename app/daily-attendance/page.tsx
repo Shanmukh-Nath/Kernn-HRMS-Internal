@@ -45,7 +45,7 @@ const MONTH_NAMES = [
   { value: 12, label: 'December' },
 ];
 
-const AVAILABLE_YEARS = [2026, 2027, 2028];
+const AVAILABLE_YEARS = [2024, 2025, 2026, 2027, 2028, 2029, 2030];
 
 export default function DailyAttendancePage() {
   const [currentUser, setCurrentUser] = useState<any | null>(null);
@@ -55,9 +55,9 @@ export default function DailyAttendancePage() {
   const [loading, setLoading] = useState(true);
   const [ledgerLoading, setLedgerLoading] = useState(false);
 
-  // Month & Year Picker State (Starting from September 2026)
-  const [selectedMonth, setSelectedMonth] = useState(9); // September
-  const [selectedYear, setSelectedYear] = useState(2026);
+  // Month & Year Picker State (Dynamically defaults to current calendar month & year)
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(() => new Date().getFullYear());
 
   // Admin View States
   const [search, setSearch] = useState('');
