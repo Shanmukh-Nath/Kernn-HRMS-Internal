@@ -38,6 +38,7 @@ import {
   RotateCcw,
   TrendingUp,
   Gift,
+  Search,
 } from 'lucide-react';
 import { format, differenceInCalendarDays } from 'date-fns';
 import { useSearchParams } from 'next/navigation';
@@ -47,6 +48,8 @@ function LeavesContent() {
   const initialTab =
     searchParams.get('tab') === 'POLICIES'
       ? 'POLICIES'
+      : searchParams.get('tab') === 'BALANCES'
+      ? 'BALANCES'
       : searchParams.get('tab') === 'APPROVALS'
       ? 'APPROVALS'
       : searchParams.get('tab') === 'ACCRUALS'
@@ -55,7 +58,27 @@ function LeavesContent() {
       ? 'COMPOFF'
       : 'DESK';
 
-  const [activeTab, setActiveTab] = useState<'DESK' | 'APPROVALS' | 'POLICIES' | 'ACCRUALS' | 'COMPOFF'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'DESK' | 'APPROVALS' | 'POLICIES' | 'ACCRUALS' | 'COMPOFF' | 'BALANCES'>(initialTab);
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'POLICIES' || tab === 'BALANCES' || tab === 'APPROVALS' || tab === 'ACCRUALS' || tab === 'COMPOFF' || tab === 'DESK') {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  // Toast and policy deletion modal states
+  const [policyToast, setPolicyToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [policyToDelete, setPolicyToDelete] = useState<{ id: string; name: string; code: string } | null>(null);
+  const [deletingPolicy, setDeletingPolicy] = useState(false);
+
+  useEffect(() => {
+    if (policyToast) {
+      const timer = setTimeout(() => setPolicyToast(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [policyToast]);
+
   const [balances, setBalances] = useState<any[]>([]);
   const [requests, setRequests] = useState<any[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
@@ -95,6 +118,93 @@ function LeavesContent() {
   const [accrualFrequency, setAccrualFrequency] = useState('ALL');
   const [accrualTypeId, setAccrualTypeId] = useState('');
   const [accrualResultMsg, setAccrualResultMsg] = useState<string | null>(null);
+
+  // Staff Balances & Manual Adjustments State
+  const [staffBalances, setStaffBalances] = useState<any[]>([]);
+  const [balanceLeaveTypes, setBalanceLeaveTypes] = useState<any[]>([]);
+  const [staffBalanceLoading, setStaffBalanceLoading] = useState(false);
+  const [balanceSearch, setBalanceSearch] = useState('');
+  const [balanceDeptFilter, setBalanceDeptFilter] = useState('ALL');
+  const [balanceYear, setBalanceYear] = useState(new Date().getFullYear());
+  const [adjustingStaff, setAdjustingStaff] = useState<{
+    employeeId: string;
+    employeeName: string;
+    employeeCode: string;
+    department: string;
+    leaveTypeId: string;
+    leaveTypeName: string;
+    leaveTypeCode: string;
+    currentBalance: number;
+    currentAllocated: number;
+    currentUsed: number;
+  } | null>(null);
+  const [adjustForm, setAdjustForm] = useState({
+    action: 'INCREMENT' as 'INCREMENT' | 'DECREMENT' | 'SET_BALANCE' | 'SET_ALLOCATED',
+    amount: 1.0,
+    reason: '',
+  });
+  const [adjustSubmitting, setAdjustSubmitting] = useState(false);
+
+  const fetchStaffBalances = async () => {
+    setStaffBalanceLoading(true);
+    try {
+      const res = await fetch(`/api/leaves/balances?year=${balanceYear}`);
+      const json = await res.json();
+      if (json.success) {
+        setStaffBalances(json.data.employees || []);
+        setBalanceLeaveTypes(json.data.leaveTypes || []);
+      } else {
+        setPolicyToast({ type: 'error', message: json.error?.message || 'Failed to load staff balances' });
+      }
+    } catch {
+      setPolicyToast({ type: 'error', message: 'Network error fetching staff balances' });
+    } finally {
+      setStaffBalanceLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'BALANCES') {
+      fetchStaffBalances();
+    }
+  }, [activeTab, balanceYear]);
+
+  const handleAdjustBalanceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!adjustingStaff) return;
+    if (!adjustForm.reason.trim()) {
+      setPolicyToast({ type: 'error', message: 'Mandatory audit remark is required for balance adjustment.' });
+      return;
+    }
+    setAdjustSubmitting(true);
+    try {
+      const res = await fetch('/api/leaves/balances', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employeeId: adjustingStaff.employeeId,
+          leaveTypeId: adjustingStaff.leaveTypeId,
+          action: adjustForm.action,
+          amount: Number(adjustForm.amount),
+          reason: adjustForm.reason.trim(),
+          year: balanceYear,
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setPolicyToast({ type: 'success', message: json.message || 'Staff balance adjusted successfully!' });
+        setAdjustingStaff(null);
+        setAdjustForm({ action: 'INCREMENT', amount: 1.0, reason: '' });
+        fetchStaffBalances();
+      } else {
+        setPolicyToast({ type: 'error', message: json.error?.message || 'Adjustment failed' });
+      }
+    } catch {
+      setPolicyToast({ type: 'error', message: 'Network error submitting balance adjustment' });
+    } finally {
+      setAdjustSubmitting(false);
+    }
+  };
 
   // Apply Modal State
   const [showApplyModal, setShowApplyModal] = useState(false);
@@ -511,30 +621,38 @@ function LeavesContent() {
       });
       const json = await res.json();
       if (json.success) {
-        alert(json.message || 'Policy saved successfully!');
+        setPolicyToast({ type: 'success', message: json.message || 'Policy saved and enforced successfully!' });
         setEditingType(null);
         fetchData();
       } else {
-        alert(json.error?.message || 'Failed to save policy');
+        setPolicyToast({ type: 'error', message: json.error?.message || 'Failed to save policy' });
       }
     } catch {
-      alert('Error saving policy');
+      setPolicyToast({ type: 'error', message: 'Network error saving policy' });
     }
   };
 
-  const handleDeletePolicy = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to permanently delete policy '${name}'?\n\nThis will remove the policy and clean up associated balances.`)) return;
+  const promptDeletePolicy = (id: string, name: string, code: string) => {
+    setPolicyToDelete({ id, name, code });
+  };
+
+  const handleConfirmDeletePolicy = async () => {
+    if (!policyToDelete) return;
+    setDeletingPolicy(true);
     try {
-      const res = await fetch(`/api/leaves/types?id=${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/leaves/types?id=${encodeURIComponent(policyToDelete.id)}`, { method: 'DELETE' });
       const json = await res.json();
       if (json.success) {
-        alert(json.message || 'Policy deleted successfully');
+        setPolicyToast({ type: 'success', message: json.message || `Policy '${policyToDelete.name}' deleted successfully.` });
+        setPolicyToDelete(null);
         fetchData();
       } else {
-        alert(json.error?.message || 'Failed to delete policy');
+        setPolicyToast({ type: 'error', message: json.error?.message || 'Failed to delete policy' });
       }
     } catch {
-      alert('Error deleting policy');
+      setPolicyToast({ type: 'error', message: 'Network error deleting policy' });
+    } finally {
+      setDeletingPolicy(false);
     }
   };
 
@@ -627,13 +745,23 @@ function LeavesContent() {
     }
   };
 
+  const roleName =
+    typeof currentUser?.role === 'object'
+      ? currentUser?.role?.name
+      : currentUser?.role || currentUser?.roleId;
+
   const isPolicyAdmin =
-    currentUser?.role === 'SUPER_ADMIN' ||
-    currentUser?.role === 'HR_ADMIN';
+    roleName === 'SUPER_ADMIN' ||
+    roleName === 'HR_ADMIN' ||
+    roleName === 'role_super_admin' ||
+    roleName === 'role_hr_admin' ||
+    currentUser?.permissions?.includes('leaves:manage') ||
+    currentUser?.permissions?.includes('rules:write');
 
   const isManagerOrAdmin =
     isPolicyAdmin ||
-    currentUser?.role === 'MANAGER' ||
+    roleName === 'MANAGER' ||
+    roleName === 'role_manager' ||
     currentUser?.permissions?.includes('leaves:approve');
 
   const [selectedLeaveDetail, setSelectedLeaveDetail] = useState<any | null>(null);
@@ -674,11 +802,37 @@ function LeavesContent() {
         </div>
       </div>
 
+      {/* Policy Notification Toast */}
+      {policyToast && (
+        <div
+          className={`p-4 rounded-2xl text-xs font-semibold flex items-center justify-between shadow-lg animate-fadeIn border ${
+            policyToast.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+              : 'bg-rose-50 border-rose-200 text-rose-900'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {policyToast.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            )}
+            <span>{policyToast.message}</span>
+          </div>
+          <button
+            onClick={() => setPolicyToast(null)}
+            className="text-slate-400 hover:text-slate-600 p-1"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Primary Navigator */}
-      <div className="flex flex-wrap items-center gap-2 bg-slate-100/70 p-2 rounded-2xl border border-slate-200/80">
+      <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-100/70 p-1.5 sm:p-2 rounded-2xl border border-slate-200/80 overflow-x-auto max-w-full no-scrollbar">
         <button
           onClick={() => setActiveTab('DESK')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+          className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap ${
             activeTab === 'DESK'
               ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
               : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
@@ -691,7 +845,7 @@ function LeavesContent() {
         {isManagerOrAdmin && (
           <button
             onClick={() => setActiveTab('APPROVALS')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap ${
               activeTab === 'APPROVALS'
                 ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
                 : 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
@@ -707,8 +861,25 @@ function LeavesContent() {
 
         {isPolicyAdmin && (
           <button
+            onClick={() => setActiveTab('BALANCES')}
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap ${
+              activeTab === 'BALANCES'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-700 hover:text-slate-900 hover:bg-white/60'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Staff Balance Ledger</span>
+            <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono ${activeTab === 'BALANCES' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'}`}>
+              Adjust
+            </span>
+          </button>
+        )}
+
+        {isPolicyAdmin && (
+          <button
             onClick={() => setActiveTab('ACCRUALS')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap ${
               activeTab === 'ACCRUALS'
                 ? 'bg-purple-700 text-white shadow-sm'
                 : 'text-slate-700 hover:text-slate-900 hover:bg-white/60'
@@ -724,7 +895,7 @@ function LeavesContent() {
 
         <button
           onClick={() => setActiveTab('COMPOFF')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+          className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap ${
             activeTab === 'COMPOFF'
               ? 'bg-amber-500 text-slate-950 shadow-sm font-extrabold'
               : 'text-slate-700 hover:text-slate-900 hover:bg-white/60'
@@ -740,14 +911,14 @@ function LeavesContent() {
         {isPolicyAdmin && (
           <button
             onClick={() => setActiveTab('POLICIES')}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap ${
               activeTab === 'POLICIES'
                 ? 'bg-[#a92427] text-white shadow-sm'
                 : 'text-slate-700 hover:text-slate-900 hover:bg-white/60'
             }`}
           >
-            <Settings2 className="w-4 h-4" />
-            <span>6-Tab Leave Policy Builder</span>
+            <Sliders className="w-4 h-4" />
+            <span>Leave Policies & Accruals</span>
             <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono ${activeTab === 'POLICIES' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'}`}>
               {leaveTypes.length}
             </span>
@@ -849,8 +1020,72 @@ function LeavesContent() {
                 <p className="text-xs text-slate-400">Click &quot;Apply For Leave&quot; above to submit a new time-off request.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+              <div>
+                {/* Mobile History Cards (< md) */}
+                <div className="md:hidden divide-y divide-slate-100">
+                  {requests.map((r) => (
+                    <div key={`mobile-req-${r.id}`} className="p-4 space-y-2.5 bg-white">
+                      <div className="flex items-center justify-between">
+                        <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-800">
+                          {r.leaveType?.name || 'Leave'}
+                        </span>
+                        {r.status === 'APPROVED' && (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            Approved
+                          </span>
+                        )}
+                        {r.status === 'PENDING' && (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                            Pending Review
+                          </span>
+                        )}
+                        {r.status === 'REJECTED' && (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                            Rejected
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-mono text-slate-700 font-semibold">
+                          {format(new Date(r.startDate), 'dd MMM')} - {format(new Date(r.endDate), 'dd MMM yyyy')}
+                        </span>
+                        <span className="font-mono font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md">
+                          {r.totalDays}d
+                        </span>
+                      </div>
+
+                      {r.reason && (
+                        <div className="text-slate-600 text-xs italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                          &ldquo;{r.reason}&rdquo;
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between pt-1">
+                        {r.proofDocumentUrl ? (
+                          <button
+                            onClick={() => setPreviewDoc({ name: r.proofDocumentName || 'Prescription / Certificate', url: r.proofDocumentUrl, employeeName: r.employee?.name })}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-[10px] font-semibold"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>View Proof</span>
+                          </button>
+                        ) : <div />}
+                        <button
+                          onClick={() => setSelectedLeaveDetail(r)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>View Details</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop Table (>= md) */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
                       <th className="py-4 px-6">Leave Category</th>
@@ -918,6 +1153,7 @@ function LeavesContent() {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
             )}
           </div>
@@ -1030,6 +1266,320 @@ function LeavesContent() {
                 })}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB: STAFF LEAVE BALANCES & MANUAL OVERRIDE LEDGER */}
+      {/* ========================================================================= */}
+      {activeTab === 'BALANCES' && isPolicyAdmin && (
+        <div className="space-y-6">
+          {/* Header Card */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                  <Users className="w-5 h-5 text-indigo-600" />
+                  <span>Workforce Leave Balances Ledger & Adjustments</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Inspect employee balances across all leave categories. Super Admins and HR Admins can manually adjust balances, grant extra days, or set custom quotas with mandatory audit remarks.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
+                  <span>Year:</span>
+                  <select
+                    value={balanceYear}
+                    onChange={(e) => setBalanceYear(Number(e.target.value))}
+                    className="bg-transparent font-mono font-black focus:outline-none cursor-pointer"
+                  >
+                    <option value={2025}>2025</option>
+                    <option value={2026}>2026</option>
+                    <option value={2027}>2027</option>
+                  </select>
+                </div>
+
+                <button
+                  onClick={fetchStaffBalances}
+                  disabled={staffBalanceLoading}
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1.5 transition disabled:opacity-50"
+                  title="Refresh Balances"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${staffBalanceLoading ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Filter Toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={balanceSearch}
+                    onChange={(e) => setBalanceSearch(e.target.value)}
+                    placeholder="Search employee name, code, dept..."
+                    className="pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-slate-500">Dept:</span>
+                  <select
+                    value={balanceDeptFilter}
+                    onChange={(e) => setBalanceDeptFilter(e.target.value)}
+                    className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="ALL">All Departments</option>
+                    {Array.from(new Set(staffBalances.map((e) => e.department).filter(Boolean))).map((dept) => (
+                      <option key={dept} value={dept}>
+                        {dept}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="text-xs text-slate-500 font-mono">
+                Active Employees: <strong>{staffBalances.length}</strong> | Categories: <strong>{balanceLeaveTypes.length}</strong>
+              </div>
+            </div>
+          </div>
+
+          {/* Balances Ledger Table */}
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+            {staffBalanceLoading ? (
+              <div className="p-16 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+                <RefreshCw className="w-4 h-4 animate-spin text-indigo-600" />
+                <span>Loading staff leave ledgers...</span>
+              </div>
+            ) : staffBalances.length === 0 ? (
+              <div className="p-16 text-center space-y-2">
+                <Users className="w-10 h-10 text-slate-300 mx-auto" />
+                <div className="text-sm font-bold text-slate-700">No Employee Balances Found</div>
+                <p className="text-xs text-slate-400">Add employees in workforce directory to auto-provision ledgers.</p>
+              </div>
+            ) : (
+              <div>
+                {/* Mobile Employee Balance Cards (< md) */}
+                <div className="md:hidden divide-y divide-slate-100">
+                  {staffBalances
+                    .filter((emp) => {
+                      const matchesSearch =
+                        !balanceSearch ||
+                        emp.name?.toLowerCase().includes(balanceSearch.toLowerCase()) ||
+                        emp.employeeCode?.toLowerCase().includes(balanceSearch.toLowerCase()) ||
+                        emp.department?.toLowerCase().includes(balanceSearch.toLowerCase());
+                      const matchesDept = balanceDeptFilter === 'ALL' || emp.department === balanceDeptFilter;
+                      return matchesSearch && matchesDept;
+                    })
+                    .map((emp) => (
+                      <div key={`mobile-staff-${emp.employeeId}`} className="p-4 space-y-3 bg-white">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center font-bold text-xs shrink-0">
+                              {emp.name?.charAt(0) || 'E'}
+                            </div>
+                            <div>
+                              <div className="font-bold text-slate-900 text-sm">{emp.name}</div>
+                              <div className="text-[11px] text-slate-400 font-mono">
+                                {emp.employeeCode || 'EMP'} • {emp.department}
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              const firstLt = balanceLeaveTypes[0];
+                              const b = emp.balances?.find((item: any) => item.leaveTypeId === firstLt?.id || item.code === firstLt?.code);
+                              setAdjustingStaff({
+                                employeeId: emp.employeeId,
+                                employeeName: emp.name,
+                                employeeCode: emp.employeeCode || 'EMP',
+                                department: emp.department || 'Operations',
+                                leaveTypeId: firstLt?.id || '',
+                                leaveTypeName: firstLt?.name || 'Leave',
+                                leaveTypeCode: firstLt?.code || 'LV',
+                                currentBalance: b ? Number(b.balance) : 0,
+                                currentAllocated: b ? Number(b.allocated) : 12,
+                                currentUsed: b ? Number(b.used) : 0,
+                              });
+                              setAdjustForm({ action: 'INCREMENT', amount: 1.0, reason: '' });
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-700 font-bold text-xs border border-indigo-200"
+                          >
+                            Adjust
+                          </button>
+                        </div>
+
+                        {/* 2-Column Grid of Leave Types */}
+                        <div className="grid grid-cols-2 gap-2">
+                          {balanceLeaveTypes.map((lt) => {
+                            const b = emp.balances?.find((item: any) => item.leaveTypeId === lt.id || item.code === lt.code);
+                            const remBalance = b ? Number(b.balance) : 0;
+                            const alloc = b ? Number(b.allocated) : 0;
+                            const used = b ? Number(b.used) : 0;
+
+                            return (
+                              <div
+                                key={`m-lt-${lt.id}`}
+                                onClick={() => {
+                                  setAdjustingStaff({
+                                    employeeId: emp.employeeId,
+                                    employeeName: emp.name,
+                                    employeeCode: emp.employeeCode || 'EMP',
+                                    department: emp.department || 'Operations',
+                                    leaveTypeId: lt.id,
+                                    leaveTypeName: lt.name,
+                                    leaveTypeCode: lt.code,
+                                    currentBalance: remBalance,
+                                    currentAllocated: alloc,
+                                    currentUsed: used,
+                                  });
+                                  setAdjustForm({ action: 'INCREMENT', amount: 1.0, reason: '' });
+                                }}
+                                className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/70 active:bg-indigo-50 transition cursor-pointer"
+                              >
+                                <div className="flex items-center justify-between text-[11px] font-bold text-slate-700 mb-0.5">
+                                  <div className="flex items-center gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: lt.colorHex || '#4f46e5' }} />
+                                    <span>{lt.code}</span>
+                                  </div>
+                                  <span className="font-mono font-black text-indigo-700">{remBalance.toFixed(1)}d</span>
+                                </div>
+                                <div className="text-[9px] text-slate-400 font-mono">
+                                  Alloc: {alloc} | Used: {used}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+
+                {/* Desktop Data Table (>= md) */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
+                      <th className="py-4 px-6 sticky left-0 bg-slate-50/95 backdrop-blur-xs z-10">Employee</th>
+                      {balanceLeaveTypes.map((lt) => (
+                        <th key={lt.id} className="py-4 px-4 text-center min-w-[140px]">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span
+                              className="w-2 h-2 rounded-full"
+                              style={{ backgroundColor: lt.colorHex || '#4f46e5' }}
+                            />
+                            <span>{lt.code}</span>
+                          </div>
+                          <div className="text-[9px] text-slate-400 font-normal truncate max-w-[120px]">{lt.name}</div>
+                        </th>
+                      ))}
+                      <th className="py-4 px-6 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs">
+                    {staffBalances
+                      .filter((emp) => {
+                        const matchesSearch =
+                          !balanceSearch ||
+                          emp.name?.toLowerCase().includes(balanceSearch.toLowerCase()) ||
+                          emp.employeeCode?.toLowerCase().includes(balanceSearch.toLowerCase()) ||
+                          emp.department?.toLowerCase().includes(balanceSearch.toLowerCase());
+                        const matchesDept = balanceDeptFilter === 'ALL' || emp.department === balanceDeptFilter;
+                        return matchesSearch && matchesDept;
+                      })
+                      .map((emp) => (
+                        <tr key={emp.employeeId} className="hover:bg-slate-50/80 transition">
+                          <td className="py-4 px-6 sticky left-0 bg-white hover:bg-slate-50/80 transition z-10 border-r border-slate-100 shadow-2xs">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center font-bold text-xs shrink-0">
+                                {emp.name?.charAt(0) || 'E'}
+                              </div>
+                              <div>
+                                <div className="font-bold text-slate-900">{emp.name}</div>
+                                <div className="text-[11px] text-slate-400 font-mono">
+                                  {emp.employeeCode || 'EMP'} • {emp.department}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+
+                          {balanceLeaveTypes.map((lt) => {
+                            const b = emp.balances?.find((item: any) => item.leaveTypeId === lt.id || item.code === lt.code);
+                            const remBalance = b ? Number(b.balance) : 0;
+                            const alloc = b ? Number(b.allocated) : 0;
+                            const used = b ? Number(b.used) : 0;
+
+                            return (
+                              <td key={lt.id} className="py-4 px-4 text-center">
+                                <div
+                                  onClick={() => {
+                                    setAdjustingStaff({
+                                      employeeId: emp.employeeId,
+                                      employeeName: emp.name,
+                                      employeeCode: emp.employeeCode || 'EMP',
+                                      department: emp.department || 'Operations',
+                                      leaveTypeId: lt.id,
+                                      leaveTypeName: lt.name,
+                                      leaveTypeCode: lt.code,
+                                      currentBalance: remBalance,
+                                      currentAllocated: alloc,
+                                      currentUsed: used,
+                                    });
+                                    setAdjustForm({ action: 'INCREMENT', amount: 1.0, reason: '' });
+                                  }}
+                                  className="group inline-block p-2 rounded-2xl bg-slate-50 hover:bg-indigo-50/80 border border-slate-200/80 hover:border-indigo-300 transition cursor-pointer text-center w-full max-w-[130px]"
+                                  title={`Click to adjust ${lt.name} for ${emp.name}`}
+                                >
+                                  <div className="font-mono font-black text-sm text-slate-900 group-hover:text-indigo-600 transition">
+                                    {remBalance > 0 ? `${remBalance.toFixed(1)}d` : `${remBalance.toFixed(1)}d`}
+                                  </div>
+                                  <div className="text-[9px] text-slate-400 font-mono mt-0.5">
+                                    Alloc: {alloc} | Used: {used}
+                                  </div>
+                                </div>
+                              </td>
+                            );
+                          })}
+
+                          <td className="py-4 px-6 text-right whitespace-nowrap">
+                            <button
+                              onClick={() => {
+                                const firstLt = balanceLeaveTypes[0];
+                                const b = emp.balances?.find((item: any) => item.leaveTypeId === firstLt?.id || item.code === firstLt?.code);
+                                setAdjustingStaff({
+                                  employeeId: emp.employeeId,
+                                  employeeName: emp.name,
+                                  employeeCode: emp.employeeCode || 'EMP',
+                                  department: emp.department || 'Operations',
+                                  leaveTypeId: firstLt?.id || '',
+                                  leaveTypeName: firstLt?.name || 'Leave',
+                                  leaveTypeCode: firstLt?.code || 'LV',
+                                  currentBalance: b ? Number(b.balance) : 0,
+                                  currentAllocated: b ? Number(b.allocated) : 12,
+                                  currentUsed: b ? Number(b.used) : 0,
+                                });
+                                setAdjustForm({ action: 'INCREMENT', amount: 1.0, reason: '' });
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs transition flex items-center gap-1.5 ml-auto shadow-2xs"
+                            >
+                              <Sliders className="w-3.5 h-3.5 text-indigo-600" />
+                              <span>Adjust Balances</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1332,7 +1882,7 @@ function LeavesContent() {
                       <span>Configure</span>
                     </button>
                     <button
-                      onClick={() => handleDeletePolicy(t.id, t.name)}
+                      onClick={() => promptDeletePolicy(t.id, t.name, t.code)}
                       className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
                       title={`Permanently delete ${t.name}`}
                     >
@@ -2093,6 +2643,52 @@ function LeavesContent() {
         </div>
       )}
 
+      {/* Policy Deletion Confirmation Modal */}
+      {policyToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="w-10 h-10 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Delete Leave Policy?</h3>
+                <p className="text-xs text-slate-500">Irreversible corporate configuration change</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Are you sure you want to permanently delete policy <strong className="text-slate-900">{policyToDelete.name} ({policyToDelete.code})</strong>?
+              This will remove the policy definition from the database and cascade cleanup all associated employee balance ledgers and requests.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={deletingPolicy}
+                onClick={() => setPolicyToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingPolicy}
+                onClick={handleConfirmDeletePolicy}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs transition flex items-center gap-1.5"
+              >
+                {deletingPolicy ? (
+                  <span>Deleting...</span>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Permanently Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ========================================================================= */}
       {/* APPLY LEAVE MODAL WITH CANVAS CLIENT COMPRESSION */}
       {/* ========================================================================= */}
@@ -2725,6 +3321,205 @@ function LeavesContent() {
                   className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold shadow-xs transition disabled:opacity-50"
                 >
                   {compOffLoading ? 'Crediting Balance...' : 'Grant & Credit Balance'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MANUAL BALANCE ADJUSTMENT MODAL (SUPER ADMIN / HR ADMIN) */}
+      {/* ========================================================================= */}
+      {adjustingStaff && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-scaleUp text-xs">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold">
+                  <Sliders className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Adjust Staff Leave Balance</h3>
+                  <p className="text-[11px] text-slate-500">Super Admin Override & Balance Ledger Credit/Debit</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setAdjustingStaff(null)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Employee Target Summary */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 grid grid-cols-2 gap-2">
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Target Staff</span>
+                <span className="font-bold text-slate-900 text-sm">{adjustingStaff.employeeName}</span>
+                <span className="text-slate-400 font-mono text-[11px] block">{adjustingStaff.employeeCode}</span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Department</span>
+                <span className="font-semibold text-slate-800">{adjustingStaff.department}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleAdjustBalanceSubmit} className="space-y-3.5">
+              {/* Select Leave Category to Adjust */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Leave Policy Category</label>
+                <select
+                  value={adjustingStaff.leaveTypeId}
+                  onChange={(e) => {
+                    const selectedLt = balanceLeaveTypes.find((t) => t.id === e.target.value);
+                    const emp = staffBalances.find((emp) => emp.employeeId === adjustingStaff.employeeId);
+                    const b = emp?.balances?.find((item: any) => item.leaveTypeId === e.target.value);
+                    setAdjustingStaff({
+                      ...adjustingStaff,
+                      leaveTypeId: e.target.value,
+                      leaveTypeName: selectedLt?.name || 'Leave',
+                      leaveTypeCode: selectedLt?.code || 'LV',
+                      currentBalance: b ? Number(b.balance) : 0,
+                      currentAllocated: b ? Number(b.allocated) : 12,
+                      currentUsed: b ? Number(b.used) : 0,
+                    });
+                  }}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {balanceLeaveTypes.map((lt) => (
+                    <option key={lt.id} value={lt.id}>
+                      {lt.code} - {lt.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Current Ledger Snapshot */}
+              <div className="p-3 rounded-2xl bg-indigo-50/60 border border-indigo-100 grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <span className="text-[10px] text-indigo-700 font-bold block">Current Allocated</span>
+                  <span className="text-sm font-mono font-black text-indigo-950">{adjustingStaff.currentAllocated}d</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-indigo-700 font-bold block">Used So Far</span>
+                  <span className="text-sm font-mono font-black text-indigo-950">{adjustingStaff.currentUsed}d</span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-indigo-700 font-bold block">Available Balance</span>
+                  <span className="text-sm font-mono font-black text-indigo-950">{adjustingStaff.currentBalance}d</span>
+                </div>
+              </div>
+
+              {/* Adjustment Mode Selector */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1.5">Adjustment Action</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAdjustForm({ ...adjustForm, action: 'INCREMENT' })}
+                    className={`p-2 rounded-xl border text-center font-bold text-[11px] transition ${
+                      adjustForm.action === 'INCREMENT'
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-800 ring-2 ring-emerald-500/20'
+                        : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    Credit (+)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAdjustForm({ ...adjustForm, action: 'DECREMENT' })}
+                    className={`p-2 rounded-xl border text-center font-bold text-[11px] transition ${
+                      adjustForm.action === 'DECREMENT'
+                        ? 'bg-rose-50 border-rose-500 text-rose-800 ring-2 ring-rose-500/20'
+                        : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    Debit (-)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAdjustForm({ ...adjustForm, action: 'SET_BALANCE' })}
+                    className={`p-2 rounded-xl border text-center font-bold text-[11px] transition ${
+                      adjustForm.action === 'SET_BALANCE'
+                        ? 'bg-blue-50 border-blue-500 text-blue-800 ring-2 ring-blue-500/20'
+                        : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    Set Balance
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAdjustForm({ ...adjustForm, action: 'SET_ALLOCATED' })}
+                    className={`p-2 rounded-xl border text-center font-bold text-[11px] transition ${
+                      adjustForm.action === 'SET_ALLOCATED'
+                        ? 'bg-purple-50 border-purple-500 text-purple-800 ring-2 ring-purple-500/20'
+                        : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    Set Quota
+                  </button>
+                </div>
+              </div>
+
+              {/* Amount Input & Preview */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    {adjustForm.action === 'SET_BALANCE' || adjustForm.action === 'SET_ALLOCATED' ? 'New Target Value (Days)' : 'Adjustment Days'}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={adjustForm.amount}
+                    onChange={(e) => setAdjustForm({ ...adjustForm, amount: Number(e.target.value) })}
+                    required
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono font-bold text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-slate-100 border border-slate-200 flex flex-col justify-center">
+                  <span className="text-[10px] text-slate-500 font-bold block uppercase">Projected Balance</span>
+                  <div className="font-mono font-black text-indigo-700 text-sm">
+                    {adjustForm.action === 'INCREMENT' && (adjustingStaff.currentBalance + Number(adjustForm.amount)).toFixed(1)}
+                    {adjustForm.action === 'DECREMENT' && (adjustingStaff.currentBalance - Number(adjustForm.amount)).toFixed(1)}
+                    {adjustForm.action === 'SET_BALANCE' && Number(adjustForm.amount).toFixed(1)}
+                    {adjustForm.action === 'SET_ALLOCATED' && (Number(adjustForm.amount) - adjustingStaff.currentUsed).toFixed(1)}
+                    {' '}days
+                  </div>
+                </div>
+              </div>
+
+              {/* Mandatory Audit Remark */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Mandatory Audit Remark / Justification <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  value={adjustForm.reason}
+                  onChange={(e) => setAdjustForm({ ...adjustForm, reason: e.target.value })}
+                  placeholder="e.g. Granted special discretionary leave by Director, compensated for on-call shift, rectified clerical deduction..."
+                  rows={2}
+                  required
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                <button
+                  type="button"
+                  onClick={() => setAdjustingStaff(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={adjustSubmitting || !adjustForm.reason.trim()}
+                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{adjustSubmitting ? 'Applying Override...' : 'Confirm & Apply Adjustment'}</span>
                 </button>
               </div>
             </form>

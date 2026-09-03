@@ -10,6 +10,7 @@ import {
   leaveTypesCol,
   attendanceRulesCol,
 } from '@/lib/mongodb';
+import { syncLeaveAttendanceForDate } from '@/lib/leave-attendance-sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -144,8 +145,14 @@ export async function GET(req: NextRequest) {
     const gracePeriodMinutes = Number(activeRule?.gracePeriodMinutes ?? 15);
     const graceCutoffMinuteOfDay = shiftStartHour * 60 + shiftStartMin + gracePeriodMinutes;
 
+    // Sync leave deductions conditionally based on attendance punches
+    await syncLeaveAttendanceForDate(todayStr);
+
     for (const emp of filteredEmployees) {
-      if (onLeaveSet.has(emp.id)) {
+      const hasAttendancePunches = Boolean(checkinMap[emp.id]);
+
+      // Only mark as ON_LEAVE if employee has approved leave AND has NO attendance punches today
+      if (onLeaveSet.has(emp.id) && !hasAttendancePunches) {
         const leaveInfo = approvedLeaves.find((l) => l.employeeId === emp.id);
         const lt = leaveInfo ? ltMap.get(leaveInfo.leaveTypeId) : null;
         todayOnLeave.push({

@@ -123,3 +123,12 @@ body {
   background-size: 300% 300%;
   animation: topLaserStream 2s ease infinite;
 }
+
+/* Touch & Mobile Utilities */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

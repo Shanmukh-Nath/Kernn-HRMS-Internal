@@ -24,25 +24,37 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   ShieldCheck,
+  X,
 } from 'lucide-react';
 
-export function Sidebar() {
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+  sessionUser?: any;
+}
+
+export function Sidebar({ isOpen = false, onClose, sessionUser: propUser }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const [sessionUser, setSessionUser] = useState<any | null>(null);
+  const [internalUser, setInternalUser] = useState<any | null>(null);
+
+  const sessionUser = propUser !== undefined ? propUser : internalUser;
 
   useEffect(() => {
-    fetch('/api/auth/me')
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.success && d.data?.user) {
-          setSessionUser(d.data.user);
-        }
-      })
-      .catch(() => {});
-  }, [pathname]);
+    if (propUser === undefined) {
+      fetch('/api/auth/me')
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.success && d.data?.user) {
+            setInternalUser(d.data.user);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [pathname, propUser]);
 
   const handleLogout = async () => {
+    onClose?.();
     await fetch('/api/auth/logout', { method: 'POST' });
     router.push('/login');
     router.refresh();
@@ -74,7 +86,8 @@ export function Sidebar() {
           title: 'PEOPLE & WORKFORCE',
           items: [
             { name: 'Employee Directory', href: '/employees', icon: Users },
-            { name: 'Approvals & Leaves Hub', href: '/approvals', icon: CheckCircle2, badge: 'Action Required', highlight: true },
+            { name: 'Approvals Hub', href: '/approvals', icon: CheckCircle2, badge: 'Action Required', highlight: true },
+            { name: 'Leave Policies & Accruals', href: '/leaves?tab=POLICIES', icon: Palmtree, badge: 'Policy Engine' },
             { name: 'Public Holidays', href: '/holidays', icon: Calendar },
             { name: 'Notice Board', href: '/announcements', icon: Megaphone },
           ],
@@ -112,7 +125,8 @@ export function Sidebar() {
           title: 'PEOPLE & WORKFORCE',
           items: [
             { name: 'Employee Directory', href: '/employees', icon: Users },
-            { name: 'Approvals & Leaves Hub', href: '/approvals', icon: CheckCircle2, badge: 'All Types', highlight: true },
+            { name: 'Approvals Hub', href: '/approvals', icon: CheckCircle2, badge: 'All Types', highlight: true },
+            { name: 'Leave Policies & Accruals', href: '/leaves?tab=POLICIES', icon: Palmtree, badge: 'Policy Engine' },
             { name: 'Public Holidays', href: '/holidays', icon: Calendar },
             { name: 'Notice Board', href: '/announcements', icon: Megaphone },
           ],
@@ -181,19 +195,34 @@ export function Sidebar() {
   const navSections = getNavSections();
 
   return (
-    <aside className="w-64 bg-[#0a0f1d] border-r border-slate-800/80 flex flex-col justify-between shrink-0 text-slate-300 select-none shadow-xl">
+    <aside
+      className={`fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] md:static md:w-64 md:translate-x-0 bg-[#0a0f1d] border-r border-slate-800/80 flex flex-col justify-between shrink-0 text-slate-300 select-none shadow-2xl md:shadow-xl transition-transform duration-300 ease-in-out ${
+        isOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}
+    >
       <div className="overflow-y-auto flex-1 py-2 custom-scrollbar">
-        {/* Brand Header with Kernn Logo */}
-        <div className="h-16 flex items-center gap-3 px-5 border-b border-slate-800/60 bg-slate-950/40">
-          <img
-            src="/kernn-icon.png"
-            alt="Kernn"
-            className="w-8 h-8 rounded-xl object-contain shadow-lg shadow-[#a92427]/40 ring-1 ring-white/10"
-          />
-          <div className="overflow-hidden">
-            <h1 className="font-black text-sm text-white tracking-wider leading-tight">KERNN HRMS</h1>
-            <p className="text-[9px] text-[#f87171] font-bold tracking-widest uppercase">Workforce Suite</p>
+        {/* Brand Header with Kernn Logo & Mobile Close Button */}
+        <div className="h-16 flex items-center justify-between px-5 border-b border-slate-800/60 bg-slate-950/40">
+          <div className="flex items-center gap-3 overflow-hidden">
+            <img
+              src="/kernn-icon.png"
+              alt="Kernn"
+              className="w-8 h-8 rounded-xl object-contain shadow-lg shadow-[#a92427]/40 ring-1 ring-white/10 shrink-0"
+            />
+            <div className="overflow-hidden">
+              <h1 className="font-black text-sm text-white tracking-wider leading-tight truncate">KERNN HRMS</h1>
+              <p className="text-[9px] text-[#f87171] font-bold tracking-widest uppercase truncate">Workforce Suite</p>
+            </div>
           </div>
+
+          {/* Mobile Drawer Close Button */}
+          <button
+            onClick={onClose}
+            className="md:hidden p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/70 transition shrink-0 ml-2"
+            aria-label="Close navigation drawer"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Categorized Navigation Sections */}
@@ -205,14 +234,16 @@ export function Sidebar() {
               </p>
               <div className="space-y-0.5">
                 {sec.items.map((item) => {
-                  const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+                  const itemBase = item.href.split('?')[0];
+                  const isActive = pathname === item.href || pathname === itemBase || (itemBase !== '/' && pathname.startsWith(itemBase));
                   const Icon = item.icon;
 
                   return (
                     <Link
                       key={item.name}
                       href={item.href}
-                      className={`group flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-all duration-200 ${
+                      onClick={() => onClose?.()}
+                      className={`group flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 min-h-[40px] ${
                         isActive
                           ? 'bg-[#a92427] text-white shadow-md shadow-[#a92427]/25 font-bold'
                           : 'hover:bg-slate-800/60 hover:text-white text-slate-400'

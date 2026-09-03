@@ -176,7 +176,7 @@ export default function DashboardPage() {
       {/* ========================================================================= */}
       {role === 'SUPER_ADMIN' && (
         <div className="space-y-6">
-          <div className="p-8 rounded-3xl bg-gradient-to-r from-slate-950 via-[#3b0b0c] to-slate-950 text-white border border-slate-800 shadow-xl relative overflow-hidden">
+          <div className="p-5 sm:p-8 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-slate-950 via-[#3b0b0c] to-slate-950 text-white border border-slate-800 shadow-xl relative overflow-hidden">
             <div className="absolute top-0 right-0 w-96 h-96 bg-[#a92427]/20 rounded-full blur-3xl pointer-events-none" />
             <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="space-y-2">
@@ -184,7 +184,7 @@ export default function DashboardPage() {
                   <ShieldCheck className="w-3.5 h-3.5" />
                   <span>Master Infrastructure & Terminal Console</span>
                 </div>
-                <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight">
                   Welcome, Super Admin {sessionUser?.name}
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-300 max-w-xl">
@@ -192,17 +192,17 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
                 <Link
                   href="/live"
-                  className="px-5 py-2.5 rounded-2xl bg-[#a92427] hover:bg-[#8e1d20] text-white text-xs font-bold shadow-lg shadow-[#a92427]/30 transition flex items-center gap-2"
+                  className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl bg-[#a92427] hover:bg-[#8e1d20] text-white text-xs font-bold shadow-lg shadow-[#a92427]/30 transition flex items-center gap-2 active:scale-95"
                 >
                   <Radio className="w-4 h-4 text-emerald-300" />
                   <span>Live Biometrics</span>
                 </Link>
                 <Link
                   href="/reports"
-                  className="px-5 py-2.5 rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700 text-white text-xs font-bold transition flex items-center gap-2"
+                  className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700 text-white text-xs font-bold transition flex items-center gap-2 active:scale-95"
                 >
                   <FileSpreadsheet className="w-4 h-4" />
                   <span>Universal Reports</span>
@@ -212,21 +212,21 @@ export default function DashboardPage() {
           </div>
 
           {/* Super Admin Metric Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Headcount</span>
-              <div className="text-3xl font-black font-mono text-slate-900 mt-2">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+            <div className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-white border border-slate-200 shadow-xs">
+              <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Headcount</span>
+              <div className="text-2xl sm:text-3xl font-black font-mono text-slate-900 mt-1 sm:mt-2">
                 {todayData?.metrics?.totalActiveStaff || 8}
               </div>
-              <div className="text-[10px] text-slate-400 mt-1">Active workforce profiles</div>
+              <div className="text-[9px] sm:text-[10px] text-slate-400 mt-1">Active workforce profiles</div>
             </div>
 
-            <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs">
-              <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">Today&apos;s Presence</span>
-              <div className="text-3xl font-black font-mono text-emerald-700 mt-2">
+            <div className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-white border border-slate-200 shadow-xs">
+              <span className="text-[10px] sm:text-[11px] font-bold text-emerald-600 uppercase tracking-wider">Today&apos;s Presence</span>
+              <div className="text-2xl sm:text-3xl font-black font-mono text-emerald-700 mt-1 sm:mt-2">
                 {todayData?.metrics?.presentCount || 0}
               </div>
-              <div className="text-[10px] text-emerald-600 font-semibold mt-1">
+              <div className="text-[9px] sm:text-[10px] text-emerald-600 font-semibold mt-1">
                 {todayData?.metrics?.attendanceRate || 0}% roll-call rate
               </div>
             </div>
@@ -283,14 +283,14 @@ export default function DashboardPage() {
       {/* ========================================================================= */}
       {role === 'HR_ADMIN' && (
         <div className="space-y-6">
-          <div className="p-8 rounded-3xl bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 text-white border border-slate-800 shadow-xl relative overflow-hidden">
+          <div className="p-5 sm:p-8 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-slate-900 via-purple-950 to-slate-900 text-white border border-slate-800 shadow-xl relative overflow-hidden">
             <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="space-y-2">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 border border-purple-500/40 text-purple-200 text-xs font-semibold">
                   <Users className="w-3.5 h-3.5" />
                   <span>Workforce Operations & Statutory Compliance</span>
                 </div>
-                <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight">
                   Welcome back, HR Lead {sessionUser?.name}
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-300 max-w-xl">
@@ -298,17 +298,17 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
                 <Link
                   href="/employees"
-                  className="px-5 py-2.5 rounded-2xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-lg transition flex items-center gap-2"
+                  className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-lg transition flex items-center gap-2 active:scale-95"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Onboard Employee</span>
                 </Link>
                 <Link
                   href="/leaves?tab=ACCRUALS"
-                  className="px-5 py-2.5 rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700 text-white text-xs font-bold transition flex items-center gap-2"
+                  className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700 text-white text-xs font-bold transition flex items-center gap-2 active:scale-95"
                 >
                   <Clock className="w-4 h-4" />
                   <span>Run Accrual Cycle</span>
@@ -317,10 +317,10 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs">
-              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Workforce</span>
-              <div className="text-3xl font-black font-mono text-slate-900 mt-2">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+            <div className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-white border border-slate-200 shadow-xs">
+              <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Workforce</span>
+              <div className="text-2xl sm:text-3xl font-black font-mono text-slate-900 mt-1 sm:mt-2">
                 {todayData?.metrics?.totalActiveStaff || 8}
               </div>
               <div className="text-[10px] text-slate-400 mt-1">Across 6 enterprise modules</div>
@@ -360,14 +360,14 @@ export default function DashboardPage() {
       {/* ========================================================================= */}
       {role === 'MANAGER' && (
         <div className="space-y-6">
-          <div className="p-8 rounded-3xl bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white border border-slate-800 shadow-xl relative overflow-hidden">
+          <div className="p-5 sm:p-8 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white border border-slate-800 shadow-xl relative overflow-hidden">
             <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="space-y-2">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-500/40 text-blue-200 text-xs font-semibold">
                   <UserCheck className="w-3.5 h-3.5" />
                   <span>Supervisor Desk & Team Leadership</span>
                 </div>
-                <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight">
                   Welcome, Team Lead {sessionUser?.name}
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-300 max-w-xl">
@@ -375,17 +375,17 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
                 <Link
                   href="/approvals"
-                  className="px-5 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-lg transition flex items-center gap-2"
+                  className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-lg transition flex items-center gap-2 active:scale-95"
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   <span>Team Approvals Queue ({pendingApprovals.leaves.length + pendingApprovals.regularizations.length})</span>
                 </Link>
                 <Link
                   href="/announcements"
-                  className="px-5 py-2.5 rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700 text-white text-xs font-bold transition flex items-center gap-2"
+                  className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700 text-white text-xs font-bold transition flex items-center gap-2 active:scale-95"
                 >
                   <Megaphone className="w-4 h-4" />
                   <span>Post Notice</span>
@@ -396,7 +396,7 @@ export default function DashboardPage() {
 
           {/* Supervisor Action Queue Alerts */}
           {(pendingApprovals.leaves.length > 0 || pendingApprovals.regularizations.length > 0) && (
-            <div className="p-5 rounded-3xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-900 text-xs">
+            <div className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-amber-50 border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-900 text-xs">
               <div className="flex items-center gap-3">
                 <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
                 <div>
@@ -454,13 +454,13 @@ export default function DashboardPage() {
       {/* ========================================================================= */}
       {role === 'EMPLOYEE' && (
         <div className="space-y-6">
-          <div className="p-8 rounded-3xl bg-gradient-to-r from-slate-950 via-[#2d1214] to-slate-950 text-white border border-slate-800 shadow-xl relative overflow-hidden">
+          <div className="p-5 sm:p-8 rounded-2xl sm:rounded-3xl bg-gradient-to-r from-slate-950 via-[#2d1214] to-slate-950 text-white border border-slate-800 shadow-xl relative overflow-hidden">
             <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
               <div className="space-y-2">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#a92427]/30 border border-[#a92427]/50 text-[#f8b4b4] text-xs font-semibold">
                   <span>{sessionUser?.department || 'Operations'} • {sessionUser?.designation || 'Specialist'}</span>
                 </div>
-                <h2 className="text-2xl sm:text-3xl font-black tracking-tight">
+                <h2 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight">
                   Welcome, {sessionUser?.name}
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-300 max-w-xl">
@@ -468,17 +468,17 @@ export default function DashboardPage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
                 <Link
                   href="/leaves"
-                  className="px-5 py-2.5 rounded-2xl bg-[#a92427] hover:bg-[#8e1d20] text-white text-xs font-bold shadow-lg shadow-[#a92427]/30 transition flex items-center gap-2"
+                  className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl bg-[#a92427] hover:bg-[#8e1d20] text-white text-xs font-bold shadow-lg shadow-[#a92427]/30 transition flex items-center gap-2 active:scale-95"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Apply For Leave</span>
                 </Link>
                 <button
                   onClick={() => setShowCorrectionModal(true)}
-                  className="px-5 py-2.5 rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700 text-white text-xs font-bold transition flex items-center gap-2"
+                  className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700 text-white text-xs font-bold transition flex items-center gap-2 active:scale-95"
                 >
                   <Clock className="w-4 h-4 text-blue-400" />
                   <span>Request Time Correction</span>
@@ -488,9 +488,9 @@ export default function DashboardPage() {
           </div>
 
           {/* Today's Punch Card */}
-          <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="p-4 sm:p-6 rounded-2xl sm:rounded-3xl bg-white border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold ${myCheckIn ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold shrink-0 ${myCheckIn ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
                 <CalendarCheck className="w-6 h-6" />
               </div>
               <div>
@@ -747,8 +747,8 @@ export default function DashboardPage() {
       {/* ATTENDANCE CORRECTION REQUEST MODAL (FOR EMPLOYEES) */}
       {/* ========================================================================= */}
       {showCorrectionModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp text-xs">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-3.5 sm:p-4 animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl max-w-md w-full p-4 sm:p-6 shadow-2xl space-y-4 animate-scaleUp text-xs max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b pb-3">
               <div>
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">

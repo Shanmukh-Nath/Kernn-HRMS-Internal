@@ -16,13 +16,19 @@ import {
   ExternalLink,
   Check,
   X,
+  Menu,
 } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { DEFAULT_TIMEZONE } from '@/lib/timezone';
 
-export function Navbar() {
+interface NavbarProps {
+  onToggleSidebar?: () => void;
+  isSidebarOpen?: boolean;
+}
+
+export function Navbar({ onToggleSidebar, isSidebarOpen }: NavbarProps = {}) {
   const router = useRouter();
   const [timeStr, setTimeStr] = useState<string>('');
   const [sessionUser, setSessionUser] = useState<any | null>(null);
@@ -163,23 +169,34 @@ export function Navbar() {
   };
 
   return (
-    <header className="h-16 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-8 flex items-center justify-between shadow-xs sticky top-0 z-30">
-      {/* Left: Clean Breadcrumb & Live Hardware Status */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-          <span className="text-xs font-bold text-slate-700 tracking-wide uppercase">Kernn Enterprise HRMS</span>
+    <header className="h-16 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-3 sm:px-8 flex items-center justify-between shadow-xs sticky top-0 z-30">
+      {/* Left: Mobile Drawer Hamburger & Clean Breadcrumb */}
+      <div className="flex items-center gap-2 sm:gap-3 overflow-hidden">
+        {/* Mobile Hamburger Menu Toggle */}
+        <button
+          onClick={onToggleSidebar}
+          aria-label={isSidebarOpen ? 'Close Navigation Menu' : 'Open Navigation Menu'}
+          className="md:hidden p-2 -ml-1 rounded-xl text-slate-700 hover:text-slate-950 hover:bg-slate-100 transition active:scale-95 shrink-0"
+        >
+          {isSidebarOpen ? <X className="w-5 h-5 text-[#a92427]" /> : <Menu className="w-5 h-5 text-slate-800" />}
+        </button>
+
+        <div className="flex items-center gap-2 overflow-hidden">
+          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0"></div>
+          <span className="text-xs font-bold text-slate-800 tracking-wide uppercase truncate max-w-[140px] sm:max-w-none">
+            Kernn HRMS
+          </span>
         </div>
 
         <span className="hidden md:inline-block text-slate-300">|</span>
 
         {sessionUser?.role === 'SUPER_ADMIN' ? (
-          <span className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80">
+          <span className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80">
             <Activity className="w-3 h-3 text-emerald-500 animate-pulse" />
             Hardware & LAN Active
           </span>
         ) : (
-          <span className="hidden md:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80">
+          <span className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80">
             <span className="w-2 h-2 rounded-full bg-emerald-500" />
             Cloud HRMS Active
           </span>
@@ -187,12 +204,12 @@ export function Navbar() {
       </div>
 
       {/* Right: Refresh Button, Notifications Bell, Digital Clock & User Profile */}
-      <div className="flex items-center gap-2.5 sm:gap-3.5 text-sm">
+      <div className="flex items-center gap-2 sm:gap-3.5 text-sm shrink-0">
         {/* Global Live Refresh Button */}
         <button
           onClick={handleGlobalRefresh}
           title="Refresh HRMS Data & State"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200/80 transition text-xs font-bold active:scale-95"
+          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200/80 transition text-xs font-bold active:scale-95"
         >
           <RotateCw className={`w-3.5 h-3.5 text-slate-500 ${refreshing ? 'animate-spin text-[#a92427]' : ''}`} />
           <span className="hidden sm:inline">Refresh</span>
@@ -222,7 +239,7 @@ export function Navbar() {
 
           {/* Notifications Dropdown Panel */}
           {showNotifs && (
-            <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-3xl bg-white border border-slate-200 shadow-2xl z-50 overflow-hidden animate-scaleUp">
+            <div className="fixed sm:absolute right-2 sm:right-0 top-16 sm:top-auto sm:mt-2 w-[calc(100vw-1rem)] sm:w-96 max-w-[390px] rounded-3xl bg-white border border-slate-200 shadow-2xl z-50 overflow-hidden animate-scaleUp">
               {/* Header */}
               <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 bg-slate-50/80">
                 <div className="flex items-center gap-2">
@@ -327,13 +344,13 @@ export function Navbar() {
         </div>
 
         {/* User Profile Pill */}
-        <div className="flex items-center gap-3 pl-2 sm:border-l border-slate-200">
-          <div className="flex items-center gap-2.5 bg-slate-50/80 hover:bg-slate-100 p-1.5 pr-3 rounded-2xl border border-slate-200/80 transition">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#a92427] to-[#781215] text-white flex items-center justify-center font-bold text-xs shadow-xs shrink-0">
+        <div className="flex items-center gap-2 pl-1 sm:pl-2 sm:border-l border-slate-200">
+          <div className="flex items-center gap-2 bg-slate-50/80 hover:bg-slate-100 p-1 sm:p-1.5 sm:pr-3 rounded-2xl border border-slate-200/80 transition">
+            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-gradient-to-br from-[#a92427] to-[#781215] text-white flex items-center justify-center font-bold text-xs shadow-xs shrink-0">
               {sessionUser?.name ? sessionUser.name.charAt(0).toUpperCase() : 'U'}
             </div>
 
-            <div className="text-left leading-none max-w-[120px] sm:max-w-[180px]">
+            <div className="hidden sm:block text-left leading-none max-w-[100px] md:max-w-[160px]">
               <div className="font-bold text-xs text-slate-900 truncate" title={sessionUser?.name}>
                 {sessionUser?.name || 'Administrator'}
               </div>
@@ -346,7 +363,7 @@ export function Navbar() {
 
             <button
               onClick={handleLogout}
-              className="ml-1 p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+              className="p-1 sm:p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
               title="Sign Out"
             >
               <LogOut className="w-3.5 h-3.5" />

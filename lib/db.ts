@@ -411,43 +411,60 @@ export async function getLeaveRequestsList(status?: string, employeeId?: string)
 export async function processLeaveApproval(
   requestId: string,
   approvedById: string,
-  action: 'APPROVED' | 'REJECTED',
-  rejectionReason?: string
+  action: 'APPROVED' | 'REJECTED' | 'PENDING',
+  rejectionReason?: string,
+  approverName?: string,
+  approverRole?: string
 ) {
   const leaveRequests = await leaveRequestsCol();
   const leaveBalances = await leaveBalancesCol();
 
   const req = await leaveRequests.findOne({ id: requestId });
-  if (!req || req.status !== 'PENDING') throw new Error('Request not found or already processed');
+  if (!req) throw new Error('Leave request not found');
 
   const now = new Date();
+  const previousStatus = req.status;
 
+  // If request was previously approved and had already been deducted on attendance date,
+  // and is now being rejected or reverted to pending, refund the deducted days back to balance
+  if (previousStatus === 'APPROVED' && (action === 'REJECTED' || action === 'PENDING') && (req.deducted || (req.deductedDates && req.deductedDates.length > 0))) {
+    const refundedDays = req.deductedDates?.length ? Number(req.deductedDates.length) : Number(req.totalDays || 1);
+    await leaveBalances.updateOne(
+      { employeeId: req.employeeId, leaveTypeId: req.leaveTypeId },
+      {
+        $inc: { balance: refundedDays, used: -refundedDays },
+        $set: { updatedAt: now },
+      }
+    );
+  }
+
+  // Update the leave request record
   await leaveRequests.updateOne(
     { id: requestId },
     {
       $set: {
         status: action,
         approvedById,
-        rejectionReason: rejectionReason || null,
+        approvedByName: approverName || approvedById,
+        approvedByRole: approverRole || 'SUPER_ADMIN',
+        rejectionReason: action === 'REJECTED' ? (rejectionReason || null) : null,
+        decisionRemarks: rejectionReason || (action === 'APPROVED' ? 'Approved by supervisor' : 'Reverted to pending'),
         reviewedAt: now,
         updatedAt: now,
+        ...(action === 'REJECTED' || action === 'PENDING' ? { deducted: false, deductedDates: [] } : {}),
       },
     }
   );
 
-  const days = Number(req.totalDays) || 1;
+  // Note: Per requirements, leave balance is NOT deducted immediately upon approval.
+  // Deduction occurs on the leave applied date if and only if employee has NO attendance punches.
 
-  if (action === 'APPROVED') {
-    await leaveBalances.updateOne(
-      { employeeId: req.employeeId, leaveTypeId: req.leaveTypeId },
-      {
-        $inc: { balance: -days, used: days },
-        $set: { updatedAt: now },
-      }
-    );
-  }
-
-  return { success: true, status: action };
+  return {
+    success: true,
+    status: action,
+    previousStatus,
+    approvedByName: approverName || approvedById,
+  };
 }
 
 // ----------------------------------------------------

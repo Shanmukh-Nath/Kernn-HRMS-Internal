@@ -169,14 +169,20 @@ export async function PUT(req: NextRequest) {
 
     const now = new Date();
 
+    const approverName = session.name || session.userId || 'Supervisor';
+    const approverRole = session.role || 'SUPER_ADMIN';
+
     if (action === 'APPROVE') {
       await regCol.updateOne(
         { $or: [{ id }, { _id: id }] },
         {
           $set: {
             status: 'APPROVED',
-            reviewedBy: session.name || 'SUPERVISOR',
+            reviewedBy: approverName,
+            reviewedByName: approverName,
+            reviewedByRole: approverRole,
             reviewedAt: now,
+            updatedAt: now,
           },
         }
       );
@@ -192,7 +198,7 @@ export async function PUT(req: NextRequest) {
           eventType: 'CHECK_IN',
           verificationType: 'REGULARIZED_BY_MANAGER',
           verificationMode: 'REGULARIZED_BY_MANAGER',
-          rawPayload: `Regularized by ${session.name}: ${request.reason}`,
+          rawPayload: `Regularized by ${approverName}: ${request.reason}`,
           createdAt: now,
         });
       }
@@ -207,7 +213,7 @@ export async function PUT(req: NextRequest) {
           eventType: 'CHECK_OUT',
           verificationType: 'REGULARIZED_BY_MANAGER',
           verificationMode: 'REGULARIZED_BY_MANAGER',
-          rawPayload: `Regularized by ${session.name}: ${request.reason}`,
+          rawPayload: `Regularized by ${approverName}: ${request.reason}`,
           createdAt: now,
         });
       }
@@ -216,6 +222,35 @@ export async function PUT(req: NextRequest) {
         success: true,
         message: 'Attendance correction approved and punch record updated.',
       });
+    } else if (action === 'REVERT' || action === 'PENDING') {
+      await regCol.updateOne(
+        { $or: [{ id }, { _id: id }] },
+        {
+          $set: {
+            status: 'PENDING',
+            reviewedBy: approverName,
+            reviewedByName: approverName,
+            reviewedByRole: approverRole,
+            rejectionReason: null,
+            reviewedAt: now,
+            updatedAt: now,
+          },
+        }
+      );
+
+      // Clean up any generated regularized punches for this employee on this date
+      const targetDayStart = new Date(`${request.date}T00:00:00+05:30`);
+      const targetDayEnd = new Date(`${request.date}T23:59:59.999+05:30`);
+      await attCol.deleteMany({
+        employeeId: request.employeeId,
+        verificationMode: 'REGULARIZED_BY_MANAGER',
+        timestamp: { $gte: targetDayStart, $lte: targetDayEnd },
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'Attendance correction reverted back to Pending review.',
+      });
     } else {
       await regCol.updateOne(
         { $or: [{ id }, { _id: id }] },
@@ -223,11 +258,23 @@ export async function PUT(req: NextRequest) {
           $set: {
             status: 'REJECTED',
             rejectionReason: rejectionReason || 'Declined by supervisor',
-            reviewedBy: session.name || 'SUPERVISOR',
+            reviewedBy: approverName,
+            reviewedByName: approverName,
+            reviewedByRole: approverRole,
             reviewedAt: now,
+            updatedAt: now,
           },
         }
       );
+
+      // If previously approved, remove regularized punches
+      const targetDayStart = new Date(`${request.date}T00:00:00+05:30`);
+      const targetDayEnd = new Date(`${request.date}T23:59:59.999+05:30`);
+      await attCol.deleteMany({
+        employeeId: request.employeeId,
+        verificationMode: 'REGULARIZED_BY_MANAGER',
+        timestamp: { $gte: targetDayStart, $lte: targetDayEnd },
+      });
 
       return NextResponse.json({
         success: true,

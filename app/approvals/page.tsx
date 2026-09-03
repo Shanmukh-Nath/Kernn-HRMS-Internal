@@ -22,8 +22,173 @@ import {
   ShieldCheck,
   Building,
   FileText,
+  RotateCcw,
 } from 'lucide-react';
 import { format } from 'date-fns';
+
+function ApprovalMobileCard({
+  item,
+  isSupervisor,
+  actionLoading,
+  onApprove,
+  onReject,
+  onChangeDecision,
+  onInspect,
+  onPreviewDoc,
+}: {
+  item: any;
+  isSupervisor: boolean;
+  actionLoading: boolean;
+  onApprove: (item: any) => void;
+  onReject: (item: any) => void;
+  onChangeDecision: (item: any) => void;
+  onInspect: (item: any) => void;
+  onPreviewDoc?: (doc: any) => void;
+}) {
+  const isPending = item.status === 'PENDING';
+
+  return (
+    <div className="p-4 space-y-3 bg-white">
+      {/* Category + Status Header */}
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          {item.category === 'LEAVE' && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <Palmtree className="w-3 h-3" />
+              <span>Leave</span>
+            </span>
+          )}
+          {item.category === 'REGULARIZATION' && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+              <Clock className="w-3 h-3" />
+              <span>Punch Regularization</span>
+            </span>
+          )}
+          {item.category === 'PAYSLIP' && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+              <Download className="w-3 h-3" />
+              <span>Payslip Authorization</span>
+            </span>
+          )}
+        </div>
+
+        <div>
+          {item.status === 'APPROVED' && (
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+              Approved
+            </span>
+          )}
+          {item.status === 'PENDING' && (
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+              Pending
+            </span>
+          )}
+          {item.status === 'REJECTED' && (
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+              Rejected
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Staff Identifier */}
+      <div className="flex items-center gap-2.5">
+        <div className="w-9 h-9 rounded-xl bg-slate-100 border border-slate-200 text-slate-800 flex items-center justify-center font-bold text-xs shrink-0">
+          {item.employeeName?.charAt(0) || 'E'}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-bold text-slate-900 text-sm truncate">{item.employeeName}</div>
+          <div className="text-[11px] text-slate-400 font-mono truncate">
+            {item.employeeCode} • {item.department}
+          </div>
+        </div>
+      </div>
+
+      {/* Item Details Box */}
+      <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 space-y-1 text-xs">
+        <div className="font-bold text-slate-800">{item.title}</div>
+        <div className="text-[11px] text-slate-500 font-mono">{item.subtitle}</div>
+        {item.reason && (
+          <div className="text-slate-600 mt-1.5 text-[11px] italic line-clamp-2">
+            &ldquo;{item.reason}&rdquo;
+          </div>
+        )}
+        {item.proofDocumentUrl && onPreviewDoc && (
+          <button
+            onClick={() => onPreviewDoc({ name: item.proofDocumentName || 'Proof Certificate', url: item.proofDocumentUrl, employeeName: item.employeeName })}
+            className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 font-semibold text-[10px] border border-blue-200"
+          >
+            <Eye className="w-3 h-3" />
+            <span>View Proof Document</span>
+          </button>
+        )}
+      </div>
+
+      {/* Managerial Attribution / Decision Remark */}
+      {(item.approvedByName || item.rejectionReason) && (
+        <div className="p-2.5 rounded-xl bg-slate-50/80 border border-slate-200 text-[11px] space-y-0.5">
+          {item.approvedByName && (
+            <div className="text-slate-700">
+              Actioned by: <strong>{item.approvedByName}</strong>
+              {item.reviewedAt && (
+                <span className="text-slate-400 font-mono ml-1">
+                  ({format(new Date(item.reviewedAt), 'dd MMM, HH:mm')})
+                </span>
+              )}
+            </div>
+          )}
+          {item.rejectionReason && (
+            <div className="text-rose-700 font-medium">
+              Reason: &ldquo;{item.rejectionReason}&rdquo;
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Action Toolbar (Touch-friendly & prominent) */}
+      <div className="flex items-center gap-2 pt-1">
+        {isPending ? (
+          <>
+            <button
+              onClick={() => onApprove(item)}
+              disabled={actionLoading}
+              className="flex-1 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs transition disabled:opacity-50"
+            >
+              <Check className="w-4 h-4" />
+              <span>Approve</span>
+            </button>
+            <button
+              onClick={() => onReject(item)}
+              disabled={actionLoading}
+              className="flex-1 py-2.5 px-3 rounded-xl bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-700 border border-rose-200 font-bold text-xs flex items-center justify-center gap-1.5 transition disabled:opacity-50"
+            >
+              <X className="w-4 h-4" />
+              <span>Reject</span>
+            </button>
+          </>
+        ) : (
+          isSupervisor && (
+            <button
+              onClick={() => onChangeDecision(item)}
+              disabled={actionLoading}
+              className="flex-1 py-2.5 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 active:bg-amber-200 text-amber-800 border border-amber-200 font-bold text-xs flex items-center justify-center gap-1.5 transition disabled:opacity-50 shadow-2xs"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+              <span>Change Decision</span>
+            </button>
+          )
+        )}
+        <button
+          onClick={() => onInspect(item)}
+          className="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition shrink-0"
+          title="Inspect full details"
+        >
+          <Eye className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function ApprovalsPage() {
   const [activeTab, setActiveTab] = useState<'ALL' | 'LEAVES' | 'REGULARIZATIONS' | 'PAYSLIPS'>('ALL');
@@ -42,6 +207,9 @@ export default function ApprovalsPage() {
   const [previewDoc, setPreviewDoc] = useState<{ name: string; url: string; employeeName?: string } | null>(null);
   const [rejectingItem, setRejectingItem] = useState<{ type: 'LEAVE' | 'REG' | 'PAYSLIP'; id: string } | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [changeDecisionItem, setChangeDecisionItem] = useState<any | null>(null);
+  const [newDecisionAction, setNewDecisionAction] = useState<'APPROVED' | 'REJECTED' | 'PENDING'>('APPROVED');
+  const [decisionRemarks, setDecisionRemarks] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
 
   // Date Range Filter States
@@ -229,6 +397,74 @@ export default function ApprovalsPage() {
     }
   };
 
+  const handleConfirmChangeDecision = async () => {
+    if (!changeDecisionItem) return;
+    if (!decisionRemarks.trim()) {
+      showToast('Please provide a reason or note for changing the decision.', 'error');
+      return;
+    }
+    setActionLoading(true);
+    try {
+      if (changeDecisionItem.category === 'LEAVE') {
+        const res = await fetch(`/api/leaves/${changeDecisionItem.id}/action`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: newDecisionAction, rejectionReason: decisionRemarks }),
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error?.message || 'Failed to update decision');
+      } else if (changeDecisionItem.category === 'REGULARIZATION') {
+        const actionCode = newDecisionAction === 'APPROVED' ? 'APPROVE' : newDecisionAction === 'REJECTED' ? 'REJECT' : 'REVERT';
+        const res = await fetch('/api/attendance/regularize', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: changeDecisionItem.id, action: actionCode, rejectionReason: decisionRemarks }),
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error?.message || 'Failed to update decision');
+      } else if (changeDecisionItem.category === 'PAYSLIP') {
+        const actionCode = newDecisionAction === 'APPROVED' ? 'APPROVE' : newDecisionAction === 'REJECTED' ? 'REJECT' : 'REVERT';
+        const res = await fetch('/api/payroll/download-approval', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: changeDecisionItem.id, action: actionCode, rejectionReason: decisionRemarks }),
+        });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error?.message || 'Failed to update decision');
+      }
+
+      showToast(`Decision updated to ${newDecisionAction.toLowerCase()} successfully!`, 'success');
+      setChangeDecisionItem(null);
+      setDecisionRemarks('');
+      if (selectedItem?.id === changeDecisionItem.id) setSelectedItem(null);
+      fetchAllApprovals();
+    } catch (err: any) {
+      showToast(err.message || 'Error updating decision', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDirectApprove = (item: any) => {
+    if (item.category === 'LEAVE') handleApproveLeave(item.id);
+    else if (item.category === 'REGULARIZATION') handleApproveReg(item.id);
+    else if (item.category === 'PAYSLIP') handleApprovePayslip(item.id);
+  };
+
+  const handleDirectReject = (item: any) => {
+    setRejectingItem({
+      type: item.category === 'LEAVE' ? 'LEAVE' : item.category === 'REGULARIZATION' ? 'REG' : 'PAYSLIP',
+      id: item.id,
+    });
+    setRejectionReason('');
+  };
+
+  const handleOpenChangeDecision = (item: any) => {
+    setChangeDecisionItem(item);
+    setNewDecisionAction(item.status === 'APPROVED' ? 'REJECTED' : 'APPROVED');
+    setDecisionRemarks('');
+  };
+
   // Build unified items list
   const allItems = useMemo(() => {
     const unified: any[] = [];
@@ -248,6 +484,11 @@ export default function ApprovalsPage() {
         proofDocumentName: l.proofDocumentName,
         status: l.status,
         rejectionReason: l.rejectionReason,
+        decisionRemarks: l.decisionRemarks || l.rejectionReason,
+        approvedById: l.approvedById,
+        approvedByName: l.approvedByName || l.approvedBy || l.approvedById,
+        approvedByRole: l.approvedByRole || 'Admin',
+        reviewedAt: l.reviewedAt,
         createdAt: l.createdAt,
         rawItem: l,
       });
@@ -266,6 +507,11 @@ export default function ApprovalsPage() {
         reason: r.reason,
         status: r.status,
         rejectionReason: r.rejectionReason,
+        decisionRemarks: r.decisionRemarks || r.rejectionReason,
+        approvedById: r.reviewedBy,
+        approvedByName: r.reviewedByName || r.reviewedBy,
+        approvedByRole: r.reviewedByRole || 'Supervisor',
+        reviewedAt: r.reviewedAt,
         createdAt: r.createdAt,
         rawItem: r,
       });
@@ -284,6 +530,11 @@ export default function ApprovalsPage() {
         reason: 'Employee requested authorized PDF download',
         status: p.status,
         rejectionReason: p.rejectionReason,
+        decisionRemarks: p.decisionRemarks || p.rejectionReason,
+        approvedById: p.reviewedBy,
+        approvedByName: p.reviewedByName || p.reviewedBy,
+        approvedByRole: p.reviewedByRole || 'Supervisor',
+        reviewedAt: p.reviewedAt,
         createdAt: p.requestedAt,
         rawItem: p,
       });
@@ -298,6 +549,10 @@ export default function ApprovalsPage() {
   const pendingRegsCount = regularizations.filter((r) => r.status === 'PENDING').length;
   const pendingPayslipsCount = payslips.filter((r) => r.status === 'PENDING').length;
   const totalPendingCount = pendingLeavesCount + pendingRegsCount + pendingPayslipsCount;
+
+  const totalApprovedCount = allItems.filter((i) => i.status === 'APPROVED').length;
+  const totalRejectedCount = allItems.filter((i) => i.status === 'REJECTED').length;
+  const totalAllCount = allItems.length;
 
   // Item date extractor
   const getItemDate = (item: any) => {
@@ -328,6 +583,418 @@ export default function ApprovalsPage() {
   });
 
   const isSupervisor = currentUser?.role === 'SUPER_ADMIN' || currentUser?.role === 'HR_ADMIN' || currentUser?.role === 'MANAGER';
+  const isEmployee = !!currentUser && !isSupervisor;
+
+  // ── Employee Self-Service Portal ──────────────────────────────────────────
+  if (isEmployee) {
+    const myPendingCount  = allItems.filter((i) => i.status === 'PENDING').length;
+    const myApprovedCount = allItems.filter((i) => i.status === 'APPROVED').length;
+    const myRejectedCount = allItems.filter((i) => i.status === 'REJECTED').length;
+
+    const myFiltered = allItems.filter((item) => {
+      const matchesStatus = statusFilter === 'ALL' || item.status === statusFilter;
+      const dStr = (() => {
+        if (item.date) return item.date;
+        if (item.createdAt) { try { return new Date(item.createdAt).toISOString().split('T')[0]; } catch {} }
+        return '';
+      })();
+      const matchesDate = (!startDate || (dStr && dStr >= startDate)) && (!endDate || (dStr && dStr <= endDate));
+      const matchesSearch = !searchQuery ||
+        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.subtitle?.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesStatus && matchesDate && matchesSearch;
+    });
+
+    const StatusBadge = ({ status }: { status: string }) => {
+      if (status === 'APPROVED')
+        return <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1"><CheckCircle2 className="w-3 h-3" />Approved</span>;
+      if (status === 'REJECTED')
+        return <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200 inline-flex items-center gap-1"><XCircle className="w-3 h-3" />Rejected</span>;
+      return <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 inline-flex items-center gap-1"><Clock className="w-3 h-3" />Pending Review</span>;
+    };
+
+    const CategoryBadge = ({ category }: { category: string }) => {
+      if (category === 'LEAVE')
+        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"><Palmtree className="w-3 h-3" />Leave</span>;
+      if (category === 'REGULARIZATION')
+        return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200"><Clock className="w-3 h-3" />Punch Fix</span>;
+      return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200"><Download className="w-3 h-3" />Payslip</span>;
+    };
+
+    return (
+      <div className="space-y-6 max-w-5xl mx-auto pb-12 animate-fadeIn relative">
+        {/* Toast */}
+        {toast.show && (
+          <div className="fixed top-6 right-6 z-50 animate-fadeIn">
+            <div className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-xl text-xs font-bold border ${toast.type === 'success' ? 'bg-emerald-900/95 text-emerald-100 border-emerald-500/30' : 'bg-rose-900/95 text-rose-100 border-rose-500/30'}`}>
+              {toast.type === 'success' ? <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" /> : <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />}
+              <span>{toast.message}</span>
+              <button onClick={() => setToast({ show: false, message: '', type: 'success' })} className="ml-2 text-slate-400 hover:text-white"><X className="w-3.5 h-3.5" /></button>
+            </div>
+          </div>
+        )}
+
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xs">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200">
+                My Requests Portal
+              </span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
+              <FileCheck2 className="w-6 h-6 sm:w-7 sm:h-7 text-[#a92427]" />
+              My Request History &amp; Status
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Track all your submitted Leave Applications, Attendance Corrections, and Payslip Authorizations — along with who reviewed them and their final decision.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold font-mono shrink-0">
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+            <span>{myPendingCount} Awaiting Review</span>
+          </div>
+        </div>
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-3 gap-3 sm:gap-4">
+          <div onClick={() => setStatusFilter('PENDING')} className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-white border border-slate-200 shadow-xs cursor-pointer hover:border-amber-400 transition group">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">Pending</span>
+              <div className="w-7 h-7 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center group-hover:bg-amber-500 group-hover:text-white transition">
+                <Clock className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <div className="text-2xl font-black font-mono text-amber-700">{myPendingCount}</div>
+          </div>
+          <div onClick={() => setStatusFilter('APPROVED')} className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-white border border-slate-200 shadow-xs cursor-pointer hover:border-emerald-400 transition group">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Approved</span>
+              <div className="w-7 h-7 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <div className="text-2xl font-black font-mono text-emerald-700">{myApprovedCount}</div>
+          </div>
+          <div onClick={() => setStatusFilter('REJECTED')} className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-white border border-slate-200 shadow-xs cursor-pointer hover:border-rose-400 transition group">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-bold text-rose-600 uppercase tracking-wider">Rejected</span>
+              <div className="w-7 h-7 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center group-hover:bg-rose-500 group-hover:text-white transition">
+                <XCircle className="w-3.5 h-3.5" />
+              </div>
+            </div>
+            <div className="text-2xl font-black font-mono text-rose-700">{myRejectedCount}</div>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center gap-3">
+          {/* Status Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            {(['ALL', 'PENDING', 'APPROVED', 'REJECTED'] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition shrink-0 whitespace-nowrap ${
+                  statusFilter === s
+                    ? s === 'PENDING' ? 'bg-amber-500 text-slate-950 ring-2 ring-amber-400/30'
+                      : s === 'APPROVED' ? 'bg-emerald-600 text-white ring-2 ring-emerald-500/30'
+                      : s === 'REJECTED' ? 'bg-rose-600 text-white ring-2 ring-rose-500/30'
+                      : 'bg-slate-900 text-white ring-2 ring-slate-700/30'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {s === 'ALL' ? 'All' : s === 'PENDING' ? 'Pending' : s === 'APPROVED' ? 'Approved' : 'Rejected'}
+              </button>
+            ))}
+          </div>
+
+          {/* Search */}
+          <div className="relative ml-auto">
+            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search requests..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#a92427] w-44"
+            />
+          </div>
+
+          {/* Date Preset */}
+          <select
+            value={datePreset}
+            onChange={(e) => handleDatePresetChange(e.target.value)}
+            className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none"
+          >
+            <option value="ALL">All Time</option>
+            <option value="THIS_MONTH">This Month</option>
+            <option value="LAST_30_DAYS">Last 30 Days</option>
+            <option value="LAST_3_MONTHS">Last 3 Months</option>
+          </select>
+
+          <span className="text-xs text-slate-400 font-mono ml-1">{myFiltered.length} record{myFiltered.length !== 1 ? 's' : ''}</span>
+        </div>
+
+        {/* Requests List */}
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+          {loading ? (
+            <div className="p-16 text-center text-slate-400 text-xs">Loading your requests...</div>
+          ) : myFiltered.length === 0 ? (
+            <div className="p-16 text-center space-y-2">
+              <FileCheck2 className="w-10 h-10 text-slate-300 mx-auto" />
+              <div className="text-sm font-bold text-slate-700">No Requests Found</div>
+              <p className="text-xs text-slate-400">
+                {statusFilter === 'PENDING'
+                  ? "You don't have any pending requests awaiting review."
+                  : statusFilter === 'APPROVED'
+                  ? "No approved requests found for the selected period."
+                  : statusFilter === 'REJECTED'
+                  ? "No rejected requests found for the selected period."
+                  : "You haven't submitted any requests yet."}
+              </p>
+            </div>
+          ) : (
+            <div>
+              {/* Mobile Cards (< md) */}
+              <div className="md:hidden divide-y divide-slate-100">
+                {myFiltered.map((item) => (
+                  <div key={`emp-m-${item.category}-${item.id}`} className="p-4 space-y-3 bg-white">
+                    <div className="flex items-center justify-between">
+                      <CategoryBadge category={item.category} />
+                      <StatusBadge status={item.status} />
+                    </div>
+                    <div>
+                      <div className="font-bold text-slate-900 text-xs">{item.title}</div>
+                      <div className="text-[11px] text-slate-500 font-mono mt-0.5">{item.subtitle}</div>
+                    </div>
+                    {item.reason && (
+                      <div className="text-[11px] text-slate-600 italic bg-slate-50 px-3 py-2 rounded-xl border border-slate-100">
+                        &ldquo;{item.reason}&rdquo;
+                      </div>
+                    )}
+                    {/* Approver Attribution */}
+                    {item.approvedByName && item.status !== 'PENDING' && (
+                      <div className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[11px] border ${item.status === 'APPROVED' ? 'bg-emerald-50/70 border-emerald-200/60 text-emerald-800' : 'bg-rose-50/70 border-rose-200/60 text-rose-800'}`}>
+                        <UserCheck className="w-3.5 h-3.5 shrink-0" />
+                        <span>
+                          {item.status === 'APPROVED' ? 'Approved' : 'Reviewed'} by <strong>{item.approvedByName}</strong>
+                          {item.approvedByRole && ` (${item.approvedByRole})`}
+                          {item.reviewedAt && ` · ${format(new Date(item.reviewedAt), 'dd MMM yyyy')}`}
+                        </span>
+                      </div>
+                    )}
+                    {item.decisionRemarks && item.status !== 'PENDING' && (
+                      <div className="text-[11px] text-rose-700 bg-rose-50/70 px-3 py-2 rounded-xl border border-rose-200/60">
+                        <span className="font-bold">Remarks:</span> {item.decisionRemarks}
+                      </div>
+                    )}
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => setSelectedItem(item)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>View Details</span>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop Table (>= md) */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
+                      <th className="py-4 px-5">Type</th>
+                      <th className="py-4 px-5">Request Details</th>
+                      <th className="py-4 px-5">Submitted On</th>
+                      <th className="py-4 px-5 text-center">Status</th>
+                      <th className="py-4 px-5">Reviewed By</th>
+                      <th className="py-4 px-5">Remarks</th>
+                      <th className="py-4 px-5 text-right">Details</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-xs">
+                    {myFiltered.map((item) => (
+                      <tr key={`emp-${item.category}-${item.id}`} className="hover:bg-slate-50/80 transition group">
+                        <td className="py-4 px-5 whitespace-nowrap">
+                          <CategoryBadge category={item.category} />
+                        </td>
+                        <td className="py-4 px-5">
+                          <div className="font-bold text-slate-900">{item.title}</div>
+                          <div className="text-[11px] text-slate-400 font-mono mt-0.5">{item.subtitle}</div>
+                          {item.reason && (
+                            <div className="text-[11px] text-slate-500 italic mt-1 max-w-xs truncate" title={item.reason}>
+                              &ldquo;{item.reason}&rdquo;
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-4 px-5 font-mono text-slate-500 whitespace-nowrap">
+                          {item.createdAt ? format(new Date(item.createdAt), 'dd MMM yyyy') : '—'}
+                        </td>
+                        <td className="py-4 px-5 text-center whitespace-nowrap">
+                          <StatusBadge status={item.status} />
+                        </td>
+                        <td className="py-4 px-5">
+                          {item.approvedByName && item.status !== 'PENDING' ? (
+                            <div>
+                              <div className="font-bold text-slate-800 flex items-center gap-1">
+                                <UserCheck className="w-3 h-3 text-slate-500" />
+                                {item.approvedByName}
+                              </div>
+                              {item.approvedByRole && (
+                                <div className="text-[10px] text-slate-400 mt-0.5">{item.approvedByRole}</div>
+                              )}
+                              {item.reviewedAt && (
+                                <div className="text-[10px] text-slate-400 font-mono">{format(new Date(item.reviewedAt), 'dd MMM yyyy, hh:mm a')}</div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-300 text-[11px]">Awaiting review</span>
+                          )}
+                        </td>
+                        <td className="py-4 px-5 max-w-xs">
+                          {item.decisionRemarks && item.status !== 'PENDING' ? (
+                            <div className="text-[11px] text-rose-700 bg-rose-50 px-2 py-1 rounded-lg border border-rose-200/60 truncate max-w-[180px]" title={item.decisionRemarks}>
+                              {item.decisionRemarks}
+                            </div>
+                          ) : (
+                            <span className="text-slate-300 text-[11px]">—</span>
+                          )}
+                        </td>
+                        <td className="py-4 px-5 text-right whitespace-nowrap">
+                          <button
+                            onClick={() => setSelectedItem(item)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] transition"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>View</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Inspection Modal (read-only for employee) */}
+        {selectedItem && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn">
+            <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                  <Eye className="w-5 h-5 text-[#a92427]" />
+                  Request Details
+                </h3>
+                <button onClick={() => setSelectedItem(null)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <CategoryBadge category={selectedItem.category} />
+                  <StatusBadge status={selectedItem.status} />
+                </div>
+
+                <div className="bg-slate-50 rounded-2xl p-4 space-y-2.5 border border-slate-100">
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Request</div>
+                    <div className="font-bold text-slate-900 text-sm">{selectedItem.title}</div>
+                    <div className="text-xs text-slate-500 font-mono">{selectedItem.subtitle}</div>
+                  </div>
+                  {selectedItem.reason && (
+                    <div>
+                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Reason Provided</div>
+                      <div className="text-xs text-slate-700 italic">&ldquo;{selectedItem.reason}&rdquo;</div>
+                    </div>
+                  )}
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Submitted On</div>
+                    <div className="text-xs font-mono text-slate-700">
+                      {selectedItem.createdAt ? format(new Date(selectedItem.createdAt), 'dd MMM yyyy, hh:mm a') : '—'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Review Trail */}
+                {selectedItem.status !== 'PENDING' && (
+                  <div className={`rounded-2xl p-4 border space-y-2 ${selectedItem.status === 'APPROVED' ? 'bg-emerald-50/70 border-emerald-200' : 'bg-rose-50/70 border-rose-200'}`}>
+                    <div className="text-[10px] font-extrabold uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                      {selectedItem.status === 'APPROVED'
+                        ? <><CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /><span className="text-emerald-700">Approval Trail</span></>
+                        : <><XCircle className="w-3.5 h-3.5 text-rose-600" /><span className="text-rose-700">Rejection Trail</span></>
+                      }
+                    </div>
+                    {selectedItem.approvedByName && (
+                      <div className="flex items-center gap-2 text-xs">
+                        <UserCheck className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                        <span>
+                          <strong>{selectedItem.approvedByName}</strong>
+                          {selectedItem.approvedByRole && <span className="text-slate-500"> ({selectedItem.approvedByRole})</span>}
+                        </span>
+                      </div>
+                    )}
+                    {selectedItem.reviewedAt && (
+                      <div className="text-[11px] text-slate-500 font-mono pl-5">
+                        {format(new Date(selectedItem.reviewedAt), 'dd MMM yyyy, hh:mm a')}
+                      </div>
+                    )}
+                    {selectedItem.decisionRemarks && (
+                      <div className="text-xs text-slate-700 bg-white/70 rounded-xl px-3 py-2 border border-white/80 mt-1">
+                        <span className="font-bold text-slate-600">Remarks: </span>
+                        {selectedItem.decisionRemarks}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {selectedItem.status === 'PENDING' && (
+                  <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-4 flex items-center gap-3 text-xs text-amber-800">
+                    <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span>Your request is currently <strong>awaiting review</strong> by your manager or HR team. You'll be notified once a decision is made.</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setSelectedItem(null)}
+                  className="px-5 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Doc Preview Modal */}
+        {previewDoc && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+            <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-5 space-y-4 max-h-[90vh] overflow-auto">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-black text-slate-900">{previewDoc.name}</span>
+                <button onClick={() => setPreviewDoc(null)} className="p-2 rounded-xl hover:bg-slate-100 text-slate-500"><X className="w-4 h-4" /></button>
+              </div>
+              <div className="max-h-[70vh] overflow-auto flex items-center justify-center bg-slate-50 rounded-2xl p-2 border border-slate-200">
+                <img src={previewDoc.url} alt={previewDoc.name} className="max-h-[65vh] max-w-full rounded-xl object-contain" />
+              </div>
+              <div className="flex justify-end">
+                <button onClick={() => setPreviewDoc(null)} className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs">Close</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+  // ── End Employee Self-Service Portal ──────────────────────────────────────
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12 animate-fadeIn relative">
@@ -358,7 +1025,7 @@ export default function ApprovalsPage() {
       )}
 
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xs">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-[#a92427]/10 text-[#a92427] border border-[#a92427]/20">
@@ -368,8 +1035,8 @@ export default function ApprovalsPage() {
               Multi-Domain Sign-off Console
             </span>
           </div>
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
-            <CheckCircle2 className="w-7 h-7 text-[#a92427]" />
+          <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
+            <CheckCircle2 className="w-6 h-6 sm:w-7 sm:h-7 text-[#a92427]" />
             Workforce Approvals & Regularizations
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
@@ -378,7 +1045,7 @@ export default function ApprovalsPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold font-mono">
+          <div className="flex items-center gap-2 px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold font-mono">
             <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
             <span>{totalPendingCount} Sign-offs Pending</span>
           </div>
@@ -386,71 +1053,71 @@ export default function ApprovalsPage() {
       </div>
 
       {/* 4 Summary Metric Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
         <div
           onClick={() => { setActiveTab('ALL'); setStatusFilter('PENDING'); }}
-          className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs cursor-pointer hover:border-[#a92427]/50 transition group"
+          className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-white border border-slate-200 shadow-xs cursor-pointer hover:border-[#a92427]/50 transition group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">All Pending</span>
+            <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider">All Pending</span>
             <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center group-hover:bg-[#a92427] group-hover:text-white transition">
               <Layers className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-3xl font-black font-mono text-slate-900 mt-2">{totalPendingCount}</div>
-          <div className="text-[10px] text-slate-400 mt-1">Across all workforce domains</div>
+          <div className="text-2xl sm:text-3xl font-black font-mono text-slate-900 mt-1 sm:mt-2">{totalPendingCount}</div>
+          <div className="text-[9px] sm:text-[10px] text-slate-400 mt-1">Across all workforce domains</div>
         </div>
 
         <div
           onClick={() => { setActiveTab('LEAVES'); setStatusFilter('PENDING'); }}
-          className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs cursor-pointer hover:border-emerald-400 transition group"
+          className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-white border border-slate-200 shadow-xs cursor-pointer hover:border-emerald-400 transition group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">Leave Applications</span>
+            <span className="text-[10px] sm:text-[11px] font-bold text-emerald-600 uppercase tracking-wider">Leave Applications</span>
             <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-600 group-hover:text-white transition">
               <Palmtree className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-3xl font-black font-mono text-emerald-700 mt-2">{pendingLeavesCount}</div>
-          <div className="text-[10px] text-slate-400 mt-1">CL, SL, EL & Medical Leaves</div>
+          <div className="text-2xl sm:text-3xl font-black font-mono text-emerald-700 mt-1 sm:mt-2">{pendingLeavesCount}</div>
+          <div className="text-[9px] sm:text-[10px] text-slate-400 mt-1">CL, SL, EL & Medical Leaves</div>
         </div>
 
         <div
           onClick={() => { setActiveTab('REGULARIZATIONS'); setStatusFilter('PENDING'); }}
-          className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs cursor-pointer hover:border-blue-400 transition group"
+          className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-white border border-slate-200 shadow-xs cursor-pointer hover:border-blue-400 transition group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">Attendance Corrections</span>
+            <span className="text-[10px] sm:text-[11px] font-bold text-blue-600 uppercase tracking-wider">Punch Adjustments</span>
             <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition">
               <Clock className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-3xl font-black font-mono text-blue-700 mt-2">{pendingRegsCount}</div>
-          <div className="text-[10px] text-slate-400 mt-1">Recorded vs requested punch adjustments</div>
+          <div className="text-2xl sm:text-3xl font-black font-mono text-blue-700 mt-1 sm:mt-2">{pendingRegsCount}</div>
+          <div className="text-[9px] sm:text-[10px] text-slate-400 mt-1">Biometric regularizations</div>
         </div>
 
         <div
           onClick={() => { setActiveTab('PAYSLIPS'); setStatusFilter('PENDING'); }}
-          className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs cursor-pointer hover:border-purple-400 transition group"
+          className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-white border border-slate-200 shadow-xs cursor-pointer hover:border-purple-400 transition group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-purple-600 uppercase tracking-wider">Payslip Downloads</span>
+            <span className="text-[10px] sm:text-[11px] font-bold text-purple-600 uppercase tracking-wider">Payslip Clearance</span>
             <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center group-hover:bg-purple-600 group-hover:text-white transition">
               <Download className="w-4 h-4" />
             </div>
           </div>
-          <div className="text-3xl font-black font-mono text-purple-700 mt-2">{pendingPayslipsCount}</div>
-          <div className="text-[10px] text-slate-400 mt-1">Authorized PDF export requests</div>
+          <div className="text-2xl sm:text-3xl font-black font-mono text-purple-700 mt-1 sm:mt-2">{pendingPayslipsCount}</div>
+          <div className="text-[9px] sm:text-[10px] text-slate-400 mt-1">Authorized PDF export requests</div>
         </div>
       </div>
 
       {/* Primary Tab Navigator & Filter Toolbar */}
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80 overflow-x-auto max-w-full no-scrollbar">
             <button
               onClick={() => setActiveTab('ALL')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap ${
                 activeTab === 'ALL'
                   ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
                   : 'text-slate-600 hover:text-slate-900'
@@ -465,7 +1132,7 @@ export default function ApprovalsPage() {
 
             <button
               onClick={() => setActiveTab('LEAVES')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap ${
                 activeTab === 'LEAVES'
                   ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
                   : 'text-slate-600 hover:text-slate-900'
@@ -480,7 +1147,7 @@ export default function ApprovalsPage() {
 
             <button
               onClick={() => setActiveTab('REGULARIZATIONS')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap ${
                 activeTab === 'REGULARIZATIONS'
                   ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
                   : 'text-slate-600 hover:text-slate-900'
@@ -495,7 +1162,7 @@ export default function ApprovalsPage() {
 
             <button
               onClick={() => setActiveTab('PAYSLIPS')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 sm:gap-2 shrink-0 whitespace-nowrap ${
                 activeTab === 'PAYSLIPS'
                   ? 'bg-white text-slate-900 shadow-sm border border-slate-200'
                   : 'text-slate-600 hover:text-slate-900'
@@ -578,17 +1245,82 @@ export default function ApprovalsPage() {
               )}
             </div>
 
-            {/* Status Filter */}
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#a92427]"
+          </div>
+        </div>
+
+        {/* Prominent Status Pill Selector Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1 border-t border-slate-100">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold text-slate-500 mr-1 flex items-center gap-1">
+              <Filter className="w-3.5 h-3.5" /> Approval Status:
+            </span>
+            <button
+              type="button"
+              onClick={() => setStatusFilter('PENDING')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs ${
+                statusFilter === 'PENDING'
+                  ? 'bg-amber-500 text-slate-950 font-black ring-2 ring-amber-500/30'
+                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
             >
-              <option value="PENDING">Pending Sign-off</option>
-              <option value="APPROVED">Approved</option>
-              <option value="REJECTED">Rejected</option>
-              <option value="ALL">All Statuses</option>
-            </select>
+              <Clock className="w-3.5 h-3.5" />
+              <span>Pending Review</span>
+              <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono ${statusFilter === 'PENDING' ? 'bg-amber-600 text-slate-950 font-bold' : 'bg-slate-100 text-slate-600'}`}>
+                {totalPendingCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setStatusFilter('APPROVED')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs ${
+                statusFilter === 'APPROVED'
+                  ? 'bg-emerald-600 text-white font-black ring-2 ring-emerald-600/30'
+                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Approved (History)</span>
+              <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono ${statusFilter === 'APPROVED' ? 'bg-emerald-700 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                {totalApprovedCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setStatusFilter('REJECTED')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs ${
+                statusFilter === 'REJECTED'
+                  ? 'bg-rose-600 text-white font-black ring-2 ring-rose-600/30'
+                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <XCircle className="w-3.5 h-3.5" />
+              <span>Rejected (History)</span>
+              <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono ${statusFilter === 'REJECTED' ? 'bg-rose-700 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                {totalRejectedCount}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setStatusFilter('ALL')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-2xs ${
+                statusFilter === 'ALL'
+                  ? 'bg-slate-900 text-white font-black ring-2 ring-slate-900/30'
+                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>All Feed</span>
+              <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-mono ${statusFilter === 'ALL' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                {totalAllCount}
+              </span>
+            </button>
+          </div>
+
+          <div className="text-xs text-slate-400 font-mono">
+            Showing <strong>{filteredAllItems.length}</strong> record{filteredAllItems.length === 1 ? '' : 's'}
           </div>
         </div>
       </div>
@@ -611,8 +1343,27 @@ export default function ApprovalsPage() {
                     <p className="text-xs text-slate-400">No requests match the current status filter.</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                  <div>
+                    {/* Mobile Feed (< md) */}
+                    <div className="md:hidden divide-y divide-slate-100">
+                      {filteredAllItems.map((item) => (
+                        <ApprovalMobileCard
+                          key={`${item.category}-${item.id}`}
+                          item={item}
+                          isSupervisor={isSupervisor}
+                          actionLoading={actionLoading}
+                          onApprove={handleDirectApprove}
+                          onReject={handleDirectReject}
+                          onChangeDecision={handleOpenChangeDecision}
+                          onInspect={setSelectedItem}
+                          onPreviewDoc={setPreviewDoc}
+                        />
+                      ))}
+                    </div>
+
+                    {/* Desktop Data Table (>= md) */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
                           <th className="py-4 px-6">Domain Type</th>
@@ -675,9 +1426,21 @@ export default function ApprovalsPage() {
                               </td>
                               <td className="py-4 px-6 text-center whitespace-nowrap">
                                 {item.status === 'APPROVED' && (
-                                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                    Approved
-                                  </span>
+                                  <div>
+                                    <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      Approved
+                                    </span>
+                                    {item.approvedByName && (
+                                      <div className="text-[10px] text-emerald-700 font-medium mt-1">
+                                        by {item.approvedByName}
+                                      </div>
+                                    )}
+                                    {item.reviewedAt && (
+                                      <div className="text-[9px] text-slate-400 font-mono">
+                                        {format(new Date(item.reviewedAt), 'dd MMM, HH:mm')}
+                                      </div>
+                                    )}
+                                  </div>
                                 )}
                                 {item.status === 'PENDING' && (
                                   <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
@@ -685,9 +1448,21 @@ export default function ApprovalsPage() {
                                   </span>
                                 )}
                                 {item.status === 'REJECTED' && (
-                                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                                    Rejected
-                                  </span>
+                                  <div>
+                                    <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                      Rejected
+                                    </span>
+                                    {item.approvedByName && (
+                                      <div className="text-[10px] text-rose-700 font-medium mt-1">
+                                        by {item.approvedByName}
+                                      </div>
+                                    )}
+                                    {item.rejectionReason && (
+                                      <div className="text-[9px] text-rose-600 italic truncate max-w-[130px] mx-auto mt-0.5" title={item.rejectionReason}>
+                                        "{item.rejectionReason}"
+                                      </div>
+                                    )}
+                                  </div>
                                 )}
                               </td>
                               <td className="py-4 px-6 text-right whitespace-nowrap">
@@ -730,6 +1505,22 @@ export default function ApprovalsPage() {
                                       </button>
                                     </>
                                   )}
+
+                                  {isSupervisor && !isPending && (
+                                    <button
+                                      onClick={() => {
+                                        setChangeDecisionItem(item);
+                                        setNewDecisionAction(item.status === 'APPROVED' ? 'REJECTED' : 'APPROVED');
+                                        setDecisionRemarks('');
+                                      }}
+                                      disabled={actionLoading}
+                                      className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-xs transition flex items-center gap-1 shadow-2xs"
+                                      title="Change decision on this request"
+                                    >
+                                      <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+                                      <span>Change Decision</span>
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -737,6 +1528,7 @@ export default function ApprovalsPage() {
                         })}
                       </tbody>
                     </table>
+                    </div>
                   </div>
                 )}
               </div>
@@ -747,7 +1539,27 @@ export default function ApprovalsPage() {
             {/* ========================================================================= */}
             {activeTab === 'LEAVES' && (
               <div>
-                <div className="overflow-x-auto">
+                {/* Mobile Feed (< md) */}
+                <div className="md:hidden divide-y divide-slate-100">
+                  {filteredAllItems
+                    .filter((item) => item.category === 'LEAVE')
+                    .map((item) => (
+                      <ApprovalMobileCard
+                        key={`leave-mobile-${item.id}`}
+                        item={item}
+                        isSupervisor={isSupervisor}
+                        actionLoading={actionLoading}
+                        onApprove={handleDirectApprove}
+                        onReject={handleDirectReject}
+                        onChangeDecision={handleOpenChangeDecision}
+                        onInspect={setSelectedItem}
+                        onPreviewDoc={setPreviewDoc}
+                      />
+                    ))}
+                </div>
+
+                {/* Desktop Data Table (>= md) */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
@@ -809,9 +1621,21 @@ export default function ApprovalsPage() {
                               </td>
                               <td className="py-4 px-6 text-center whitespace-nowrap">
                                 {r.status === 'APPROVED' && (
-                                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                    Approved
-                                  </span>
+                                  <div>
+                                    <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      Approved
+                                    </span>
+                                    {r.approvedByName && (
+                                      <div className="text-[10px] text-emerald-700 font-medium mt-1">
+                                        by {r.approvedByName}
+                                      </div>
+                                    )}
+                                    {r.reviewedAt && (
+                                      <div className="text-[9px] text-slate-400 font-mono">
+                                        {format(new Date(r.reviewedAt), 'dd MMM, HH:mm')}
+                                      </div>
+                                    )}
+                                  </div>
                                 )}
                                 {r.status === 'PENDING' && (
                                   <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
@@ -819,9 +1643,21 @@ export default function ApprovalsPage() {
                                   </span>
                                 )}
                                 {r.status === 'REJECTED' && (
-                                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                                    Rejected
-                                  </span>
+                                  <div>
+                                    <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                      Rejected
+                                    </span>
+                                    {r.approvedByName && (
+                                      <div className="text-[10px] text-rose-700 font-medium mt-1">
+                                        by {r.approvedByName}
+                                      </div>
+                                    )}
+                                    {r.rejectionReason && (
+                                      <div className="text-[9px] text-rose-600 italic truncate max-w-[130px] mx-auto mt-0.5" title={r.rejectionReason}>
+                                        "{r.rejectionReason}"
+                                      </div>
+                                    )}
+                                  </div>
                                 )}
                               </td>
                               <td className="py-4 px-6 text-right whitespace-nowrap">
@@ -831,7 +1667,7 @@ export default function ApprovalsPage() {
                                       <button
                                         onClick={() => handleApproveLeave(r.id)}
                                         disabled={actionLoading}
-                                        className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition flex items-center gap-1"
+                                        className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition flex items-center gap-1 shadow-2xs"
                                       >
                                         <Check className="w-3.5 h-3.5" />
                                         <span>Approve</span>
@@ -849,6 +1685,31 @@ export default function ApprovalsPage() {
                                       </button>
                                     </>
                                   )}
+
+                                  {isSupervisor && !isPending && (
+                                    <button
+                                      onClick={() => {
+                                        setChangeDecisionItem({
+                                          id: r.id,
+                                          category: 'LEAVE',
+                                          title: `${r.leaveType?.name || 'Leave'} (${r.totalDays} day${r.totalDays > 1 ? 's' : ''})`,
+                                          employeeName: r.employee?.name || 'Employee',
+                                          status: r.status,
+                                          approvedByName: r.approvedByName || r.approvedBy || r.approvedById,
+                                          rejectionReason: r.rejectionReason,
+                                          decisionRemarks: r.decisionRemarks,
+                                        });
+                                        setNewDecisionAction(r.status === 'APPROVED' ? 'REJECTED' : 'APPROVED');
+                                        setDecisionRemarks('');
+                                      }}
+                                      disabled={actionLoading}
+                                      className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-xs transition flex items-center gap-1 shadow-2xs"
+                                      title="Change decision on this leave request"
+                                    >
+                                      <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+                                      <span>Change Decision</span>
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -865,7 +1726,27 @@ export default function ApprovalsPage() {
             {/* ========================================================================= */}
             {activeTab === 'REGULARIZATIONS' && (
               <div>
-                <div className="overflow-x-auto">
+                {/* Mobile Feed (< md) */}
+                <div className="md:hidden divide-y divide-slate-100">
+                  {filteredAllItems
+                    .filter((item) => item.category === 'REGULARIZATION')
+                    .map((item) => (
+                      <ApprovalMobileCard
+                        key={`reg-mobile-${item.id}`}
+                        item={item}
+                        isSupervisor={isSupervisor}
+                        actionLoading={actionLoading}
+                        onApprove={handleDirectApprove}
+                        onReject={handleDirectReject}
+                        onChangeDecision={handleOpenChangeDecision}
+                        onInspect={setSelectedItem}
+                        onPreviewDoc={setPreviewDoc}
+                      />
+                    ))}
+                </div>
+
+                {/* Desktop Data Table (>= md) */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
@@ -922,9 +1803,21 @@ export default function ApprovalsPage() {
                               </td>
                               <td className="py-4 px-6 text-center whitespace-nowrap">
                                 {r.status === 'APPROVED' && (
-                                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                    Punch Regularized
-                                  </span>
+                                  <div>
+                                    <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      Punch Regularized
+                                    </span>
+                                    {(r.reviewedByName || r.reviewedBy) && (
+                                      <div className="text-[10px] text-emerald-700 font-medium mt-1">
+                                        by {r.reviewedByName || r.reviewedBy}
+                                      </div>
+                                    )}
+                                    {r.reviewedAt && (
+                                      <div className="text-[9px] text-slate-400 font-mono">
+                                        {format(new Date(r.reviewedAt), 'dd MMM, HH:mm')}
+                                      </div>
+                                    )}
+                                  </div>
                                 )}
                                 {r.status === 'PENDING' && (
                                   <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
@@ -932,9 +1825,21 @@ export default function ApprovalsPage() {
                                   </span>
                                 )}
                                 {r.status === 'REJECTED' && (
-                                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                                    Rejected
-                                  </span>
+                                  <div>
+                                    <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                      Rejected
+                                    </span>
+                                    {(r.reviewedByName || r.reviewedBy) && (
+                                      <div className="text-[10px] text-rose-700 font-medium mt-1">
+                                        by {r.reviewedByName || r.reviewedBy}
+                                      </div>
+                                    )}
+                                    {r.rejectionReason && (
+                                      <div className="text-[9px] text-rose-600 italic truncate max-w-[130px] mx-auto mt-0.5" title={r.rejectionReason}>
+                                        "{r.rejectionReason}"
+                                      </div>
+                                    )}
+                                  </div>
                                 )}
                               </td>
                               <td className="py-4 px-6 text-right whitespace-nowrap">
@@ -944,7 +1849,7 @@ export default function ApprovalsPage() {
                                       <button
                                         onClick={() => handleApproveReg(r.id)}
                                         disabled={actionLoading}
-                                        className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition flex items-center gap-1"
+                                        className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition flex items-center gap-1 shadow-2xs"
                                       >
                                         <Check className="w-3.5 h-3.5" />
                                         <span>Regularize</span>
@@ -962,6 +1867,31 @@ export default function ApprovalsPage() {
                                       </button>
                                     </>
                                   )}
+
+                                  {isSupervisor && !isPending && (
+                                    <button
+                                      onClick={() => {
+                                        setChangeDecisionItem({
+                                          id: r.id,
+                                          category: 'REGULARIZATION',
+                                          title: `Attendance Time Correction (${format(new Date(r.date), 'dd MMM yyyy')})`,
+                                          employeeName: r.employeeName || 'Employee',
+                                          status: r.status,
+                                          approvedByName: r.reviewedByName || r.reviewedBy,
+                                          rejectionReason: r.rejectionReason,
+                                          decisionRemarks: r.decisionRemarks,
+                                        });
+                                        setNewDecisionAction(r.status === 'APPROVED' ? 'REJECTED' : 'APPROVED');
+                                        setDecisionRemarks('');
+                                      }}
+                                      disabled={actionLoading}
+                                      className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-xs transition flex items-center gap-1 shadow-2xs"
+                                      title="Change decision on this attendance request"
+                                    >
+                                      <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+                                      <span>Change Decision</span>
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -978,7 +1908,27 @@ export default function ApprovalsPage() {
             {/* ========================================================================= */}
             {activeTab === 'PAYSLIPS' && (
               <div>
-                <div className="overflow-x-auto">
+                {/* Mobile Feed (< md) */}
+                <div className="md:hidden divide-y divide-slate-100">
+                  {filteredAllItems
+                    .filter((item) => item.category === 'PAYSLIP')
+                    .map((item) => (
+                      <ApprovalMobileCard
+                        key={`payslip-mobile-${item.id}`}
+                        item={item}
+                        isSupervisor={isSupervisor}
+                        actionLoading={actionLoading}
+                        onApprove={handleDirectApprove}
+                        onReject={handleDirectReject}
+                        onChangeDecision={handleOpenChangeDecision}
+                        onInspect={setSelectedItem}
+                        onPreviewDoc={setPreviewDoc}
+                      />
+                    ))}
+                </div>
+
+                {/* Desktop Data Table (>= md) */}
+                <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
@@ -1020,9 +1970,21 @@ export default function ApprovalsPage() {
                               </td>
                               <td className="py-4 px-6 text-center whitespace-nowrap">
                                 {p.status === 'APPROVED' && (
-                                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                    Download Authorized
-                                  </span>
+                                  <div>
+                                    <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      Download Authorized
+                                    </span>
+                                    {(p.reviewedByName || p.reviewedBy) && (
+                                      <div className="text-[10px] text-emerald-700 font-medium mt-1">
+                                        by {p.reviewedByName || p.reviewedBy}
+                                      </div>
+                                    )}
+                                    {p.reviewedAt && (
+                                      <div className="text-[9px] text-slate-400 font-mono">
+                                        {format(new Date(p.reviewedAt), 'dd MMM, HH:mm')}
+                                      </div>
+                                    )}
+                                  </div>
                                 )}
                                 {p.status === 'PENDING' && (
                                   <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
@@ -1030,9 +1992,21 @@ export default function ApprovalsPage() {
                                   </span>
                                 )}
                                 {p.status === 'REJECTED' && (
-                                  <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                                    Denied
-                                  </span>
+                                  <div>
+                                    <span className="px-3 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                      Denied
+                                    </span>
+                                    {(p.reviewedByName || p.reviewedBy) && (
+                                      <div className="text-[10px] text-rose-700 font-medium mt-1">
+                                        by {p.reviewedByName || p.reviewedBy}
+                                      </div>
+                                    )}
+                                    {p.rejectionReason && (
+                                      <div className="text-[9px] text-rose-600 italic truncate max-w-[130px] mx-auto mt-0.5" title={p.rejectionReason}>
+                                        "{p.rejectionReason}"
+                                      </div>
+                                    )}
+                                  </div>
                                 )}
                               </td>
                               <td className="py-4 px-6 text-right whitespace-nowrap">
@@ -1042,7 +2016,7 @@ export default function ApprovalsPage() {
                                       <button
                                         onClick={() => handleApprovePayslip(p.id)}
                                         disabled={actionLoading}
-                                        className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition flex items-center gap-1"
+                                        className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition flex items-center gap-1 shadow-2xs"
                                       >
                                         <Check className="w-3.5 h-3.5" />
                                         <span>Authorize</span>
@@ -1059,6 +2033,31 @@ export default function ApprovalsPage() {
                                         <span>Deny</span>
                                       </button>
                                     </>
+                                  )}
+
+                                  {isSupervisor && !isPending && (
+                                    <button
+                                      onClick={() => {
+                                        setChangeDecisionItem({
+                                          id: p.id,
+                                          category: 'PAYSLIP',
+                                          title: `Official Payslip Download Sign-Off (Month ${p.month}/${p.year})`,
+                                          employeeName: p.employeeName || 'Employee',
+                                          status: p.status,
+                                          approvedByName: p.reviewedByName || p.reviewedBy,
+                                          rejectionReason: p.rejectionReason,
+                                          decisionRemarks: p.decisionRemarks,
+                                        });
+                                        setNewDecisionAction(p.status === 'APPROVED' ? 'REJECTED' : 'APPROVED');
+                                        setDecisionRemarks('');
+                                      }}
+                                      disabled={actionLoading}
+                                      className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-xs transition flex items-center gap-1 shadow-2xs"
+                                      title="Change decision on this payslip authorization"
+                                    >
+                                      <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+                                      <span>Change Decision</span>
+                                    </button>
                                   )}
                                 </div>
                               </td>
@@ -1120,6 +2119,129 @@ export default function ApprovalsPage() {
                 className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold transition shadow-xs disabled:opacity-50"
               >
                 Confirm Rejection
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change Decision Modal */}
+      {changeDecisionItem && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-scaleUp text-xs">
+            <div className="flex items-center justify-between border-b pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center font-bold">
+                  <RotateCcw className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-slate-900 text-sm">Change Supervisor Decision</h4>
+                  <p className="text-[11px] text-slate-500">
+                    Re-evaluate and revise previously completed action
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setChangeDecisionItem(null)}
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-1.5">
+              <div className="text-[11px] text-slate-500">Target Request Details</div>
+              <div className="font-bold text-slate-900">{changeDecisionItem.employeeName}</div>
+              <div className="text-[11px] text-slate-700">{changeDecisionItem.title}</div>
+              <div className="flex items-center gap-2 pt-1 border-t border-slate-200/60">
+                <span className="text-[10px] text-slate-500">Current Status:</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                    changeDecisionItem.status === 'APPROVED'
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      : 'bg-rose-50 text-rose-700 border border-rose-200'
+                  }`}
+                >
+                  {changeDecisionItem.status}
+                </span>
+                {changeDecisionItem.approvedByName && (
+                  <span className="text-[10px] text-slate-500">by {changeDecisionItem.approvedByName}</span>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-slate-700 font-bold block">Select New Decision Outcome</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewDecisionAction('APPROVED')}
+                  className={`p-2.5 rounded-xl border text-center font-bold text-xs transition ${
+                    newDecisionAction === 'APPROVED'
+                      ? 'bg-emerald-50 border-emerald-500 text-emerald-800 ring-2 ring-emerald-500/20'
+                      : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <CheckCircle2 className="w-4 h-4 mx-auto mb-1 text-emerald-600" />
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewDecisionAction('REJECTED')}
+                  className={`p-2.5 rounded-xl border text-center font-bold text-xs transition ${
+                    newDecisionAction === 'REJECTED'
+                      ? 'bg-rose-50 border-rose-500 text-rose-800 ring-2 ring-rose-500/20'
+                      : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <XCircle className="w-4 h-4 mx-auto mb-1 text-rose-600" />
+                  Reject
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewDecisionAction('PENDING')}
+                  className={`p-2.5 rounded-xl border text-center font-bold text-xs transition ${
+                    newDecisionAction === 'PENDING'
+                      ? 'bg-amber-50 border-amber-500 text-amber-800 ring-2 ring-amber-500/20'
+                      : 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  <Clock className="w-4 h-4 mx-auto mb-1 text-amber-600" />
+                  Reopen / Pending
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-slate-700 font-bold block">
+                Decision Change Justification / Remarks <span className="text-rose-500">*</span>
+              </label>
+              <textarea
+                value={decisionRemarks}
+                onChange={(e) => setDecisionRemarks(e.target.value)}
+                placeholder="Explain the reason for changing the decision (e.g. Employee provided physical certificate, management approval granted)..."
+                rows={3}
+                className="w-full p-2.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500 text-xs bg-slate-50"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t">
+              <button
+                type="button"
+                onClick={() => setChangeDecisionItem(null)}
+                className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmChangeDecision}
+                disabled={actionLoading || !decisionRemarks.trim()}
+                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold transition shadow-xs disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Confirm Decision Change</span>
               </button>
             </div>
           </div>
@@ -1214,20 +2336,23 @@ export default function ApprovalsPage() {
               </div>
 
               {/* Reviewer / Decision Trail */}
-              {(selectedItem.rawItem?.reviewedBy || selectedItem.rejectionReason) && (
-                <div className={`p-3.5 rounded-2xl border ${selectedItem.status === 'APPROVED' ? 'bg-emerald-50/60 border-emerald-200 text-emerald-900' : 'bg-rose-50/60 border-rose-200 text-rose-900'}`}>
+              {(selectedItem.approvedByName || selectedItem.rawItem?.reviewedBy || selectedItem.rawItem?.approvedByName || selectedItem.rejectionReason || selectedItem.decisionRemarks) && (
+                <div className={`p-3.5 rounded-2xl border ${selectedItem.status === 'APPROVED' ? 'bg-emerald-50/60 border-emerald-200 text-emerald-900' : selectedItem.status === 'REJECTED' ? 'bg-rose-50/60 border-rose-200 text-rose-900' : 'bg-slate-50 border-slate-200 text-slate-800'}`}>
                   <span className="block text-[10px] uppercase font-bold">Managerial Review Audit Trail</span>
                   <div className="mt-1 space-y-0.5">
-                    {selectedItem.rawItem?.reviewedBy && (
-                      <div>Reviewed by: <strong>{selectedItem.rawItem.reviewedBy}</strong></div>
+                    {(selectedItem.approvedByName || selectedItem.rawItem?.reviewedByName || selectedItem.rawItem?.reviewedBy || selectedItem.rawItem?.approvedByName) && (
+                      <div>Actioned by: <strong>{selectedItem.approvedByName || selectedItem.rawItem?.reviewedByName || selectedItem.rawItem?.reviewedBy || selectedItem.rawItem?.approvedByName}</strong> ({selectedItem.approvedByRole || 'Admin'})</div>
                     )}
-                    {selectedItem.rawItem?.reviewedAt && (
+                    {(selectedItem.reviewedAt || selectedItem.rawItem?.reviewedAt) && (
                       <div className="text-[10px] opacity-75 font-mono">
-                        Date: {format(new Date(selectedItem.rawItem.reviewedAt), 'dd MMM yyyy, HH:mm:ss')} IST
+                        Timestamp: {format(new Date(selectedItem.reviewedAt || selectedItem.rawItem?.reviewedAt), 'dd MMM yyyy, HH:mm:ss')} IST
                       </div>
                     )}
                     {selectedItem.rejectionReason && (
-                      <div className="text-rose-700 font-semibold mt-1">Rejection Reason: {selectedItem.rejectionReason}</div>
+                      <div className="text-rose-700 font-semibold mt-1">Rejection Note: {selectedItem.rejectionReason}</div>
+                    )}
+                    {selectedItem.decisionRemarks && selectedItem.decisionRemarks !== selectedItem.rejectionReason && (
+                      <div className="text-slate-700 italic mt-1">Remarks: "{selectedItem.decisionRemarks}"</div>
                     )}
                   </div>
                 </div>

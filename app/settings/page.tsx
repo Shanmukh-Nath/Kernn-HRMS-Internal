@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import {
   Settings,
@@ -16,6 +17,9 @@ import {
   Eye,
   EyeOff,
   Sparkles,
+  Palmtree,
+  Sliders,
+  ArrowRight,
 } from 'lucide-react';
 import { DEFAULT_TIMEZONE } from '@/lib/timezone';
 
@@ -88,6 +92,51 @@ export default function SettingsPage() {
         <p className="text-sm text-slate-500 mt-0.5">
           Configure regional timezones, hardware connector parameters, and manage your account security credentials.
         </p>
+      </div>
+
+      {/* Enterprise Policy Quick Launch Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Link
+          href="/leaves?tab=POLICIES"
+          className="p-5 rounded-2xl bg-gradient-to-br from-[#a92427]/5 via-white to-white border border-[#a92427]/20 shadow-xs hover:border-[#a92427]/50 hover:shadow-md transition group space-y-2 block"
+        >
+          <div className="flex items-center justify-between">
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-[#a92427]/10 text-[#a92427] border border-[#a92427]/20 flex items-center gap-1">
+              <Palmtree className="w-3 h-3" />
+              <span>Leave Engine</span>
+            </span>
+            <div className="w-8 h-8 rounded-xl bg-[#a92427]/10 text-[#a92427] flex items-center justify-center group-hover:bg-[#a92427] group-hover:text-white transition">
+              <ArrowRight className="w-4 h-4" />
+            </div>
+          </div>
+          <h3 className="font-bold text-slate-900 text-sm group-hover:text-[#a92427] transition">
+            Leave Policies, Accruals & Quotas
+          </h3>
+          <p className="text-xs text-slate-500">
+            Configure dynamic leave types (CL, SL, EL, Comp-Off), accrual cadences, carry-forward ceilings, sandwich rules, and doctor certificate requirements.
+          </p>
+        </Link>
+
+        <Link
+          href="/settings/rules"
+          className="p-5 rounded-2xl bg-gradient-to-br from-blue-500/5 via-white to-white border border-blue-200 shadow-xs hover:border-blue-400 hover:shadow-md transition group space-y-2 block"
+        >
+          <div className="flex items-center justify-between">
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
+              <Sliders className="w-3 h-3" />
+              <span>Shift Engine</span>
+            </span>
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition">
+              <ArrowRight className="w-4 h-4" />
+            </div>
+          </div>
+          <h3 className="font-bold text-slate-900 text-sm group-hover:text-blue-700 transition">
+            Shift, Timing & Overtime Rules
+          </h3>
+          <p className="text-xs text-slate-500">
+            Configure office timings, punch grace buffers, half-day thresholds, weekly off-days, and overtime multipliers.
+          </p>
+        </Link>
       </div>
 
       {/* 1. Account Security & Password Change Card */}

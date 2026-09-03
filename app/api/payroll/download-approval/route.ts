@@ -136,28 +136,54 @@ export async function PUT(req: NextRequest) {
     const pdrCol = db.collection('payslip_download_requests');
     const now = new Date();
 
+    const approverName = session.name || session.userId || 'Supervisor';
+    const approverRole = session.role || 'SUPER_ADMIN';
+
     if (action === 'APPROVE') {
       await pdrCol.updateOne(
         { $or: [{ id }, { _id: id }] },
         {
           $set: {
             status: 'APPROVED',
-            reviewedBy: session.name || 'SUPERVISOR',
+            reviewedBy: approverName,
+            reviewedByName: approverName,
+            reviewedByRole: approverRole,
             reviewedAt: now,
+            updatedAt: now,
           },
         }
       );
 
       return NextResponse.json({ success: true, message: 'Payslip download authorization granted.' });
+    } else if (action === 'REVERT' || action === 'PENDING') {
+      await pdrCol.updateOne(
+        { $or: [{ id }, { _id: id }] },
+        {
+          $set: {
+            status: 'PENDING',
+            reviewedBy: approverName,
+            reviewedByName: approverName,
+            reviewedByRole: approverRole,
+            rejectionReason: null,
+            reviewedAt: now,
+            updatedAt: now,
+          },
+        }
+      );
+
+      return NextResponse.json({ success: true, message: 'Payslip authorization reverted back to Pending.' });
     } else {
       await pdrCol.updateOne(
         { $or: [{ id }, { _id: id }] },
         {
           $set: {
             status: 'REJECTED',
-            rejectionReason: rejectionReason || 'Declined',
-            reviewedBy: session.name || 'SUPERVISOR',
+            rejectionReason: rejectionReason || 'Declined by supervisor',
+            reviewedBy: approverName,
+            reviewedByName: approverName,
+            reviewedByRole: approverRole,
             reviewedAt: now,
+            updatedAt: now,
           },
         }
       );

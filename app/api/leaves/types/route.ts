@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthSession } from '@/lib/auth';
-import { leaveTypesCol, leaveBalancesCol, leaveRequestsCol, generateId } from '@/lib/mongodb';
+import { leaveTypesCol, leaveBalancesCol, leaveRequestsCol, employeesCol, generateId } from '@/lib/mongodb';
 
 export const dynamic = 'force-dynamic';
 
@@ -174,10 +174,42 @@ export async function POST(req: NextRequest) {
 
     await ltCol.insertOne(doc);
 
+    // Auto-initialize balance records for all active employees for this newly created policy
+    let initializedCount = 0;
+    try {
+      const empCol = await employeesCol();
+      const lbCol = await leaveBalancesCol();
+      const activeEmployees = await empCol.find({ status: { $ne: 'TERMINATED' } }).toArray();
+      const currentYear = new Date().getFullYear();
+
+      const initialAllocated = doc.defaultDaysPerYear;
+      const initialBalance = doc.accrualEnabled ? 0 : doc.defaultDaysPerYear;
+
+      const initialBalances = activeEmployees.map((emp: any) => ({
+        id: generateId(),
+        employeeId: emp.id,
+        leaveTypeId: id,
+        year: currentYear,
+        allocated: initialAllocated,
+        accrued: doc.accrualEnabled ? 0 : initialAllocated,
+        used: 0,
+        pending: 0,
+        balance: initialBalance,
+        updatedAt: now,
+      }));
+
+      if (initialBalances.length > 0) {
+        await lbCol.insertMany(initialBalances, { ordered: false }).catch(() => {});
+        initializedCount = initialBalances.length;
+      }
+    } catch {
+      // Non-blocking balance initialization
+    }
+
     return NextResponse.json({
       success: true,
-      data: { id, name, code },
-      message: `Policy '${name}' created and configured successfully across all 6 modules.`,
+      data: { id, name, code, initializedCount },
+      message: `Policy '${name}' created and configured successfully across all 6 modules. Initialized for ${initializedCount} active employee(s).`,
     });
   } catch (err: any) {
     return NextResponse.json(
@@ -299,13 +331,22 @@ export async function DELETE(req: NextRequest) {
     const lbCol = await leaveBalancesCol();
     const lrCol = await leaveRequestsCol();
 
-    await lbCol.deleteMany({ leaveTypeId: id });
-    await lrCol.deleteMany({ leaveTypeId: id });
-    await ltCol.deleteOne({ $or: [{ id }, { _id: id }] });
+    const existing = await ltCol.findOne({ $or: [{ id }, { _id: id }, { code: id }] });
+    if (!existing) {
+      return NextResponse.json(
+        { success: false, error: { code: 'NOT_FOUND', message: 'Leave policy not found' } },
+        { status: 404 }
+      );
+    }
+
+    const deleteIds = Array.from(new Set([id, existing.id, existing.code, existing._id?.toString()].filter(Boolean)));
+    const delBalResult = await lbCol.deleteMany({ leaveTypeId: { $in: deleteIds } });
+    const delReqResult = await lrCol.deleteMany({ leaveTypeId: { $in: deleteIds } });
+    await ltCol.deleteOne({ $or: [{ id: existing.id }, { code: existing.code }] });
 
     return NextResponse.json({
       success: true,
-      message: 'Policy deleted successfully along with associated records',
+      message: `Policy '${existing.name}' (${existing.code}) deleted successfully along with ${delBalResult.deletedCount} balance record(s) and ${delReqResult.deletedCount} request(s).`,
     });
   } catch (err: any) {
     return NextResponse.json(

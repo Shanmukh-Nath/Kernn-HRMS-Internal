@@ -484,7 +484,7 @@ export default function EmployeesPage() {
       )}
 
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xs">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-[#a92427]/10 text-[#a92427] border border-[#a92427]/20">
@@ -494,8 +494,8 @@ export default function EmployeesPage() {
               6-Module Enterprise Architecture
             </span>
           </div>
-          <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
-            <Users className="w-7 h-7 text-[#a92427]" />
+          <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
+            <Users className="w-6 h-6 sm:w-7 sm:h-7 text-[#a92427]" />
             Employee Management & Profiles
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
@@ -506,7 +506,7 @@ export default function EmployeesPage() {
         {canManage && (
           <button
             onClick={handleOpenAddModal}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-[#a92427] hover:bg-[#8e1d20] text-white text-xs font-bold shadow-xs transition shadow-[#a92427]/20"
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-[#a92427] hover:bg-[#8e1d20] text-white text-xs font-bold shadow-xs transition shadow-[#a92427]/20 active:scale-95"
           >
             <UserPlus className="w-4 h-4" />
             <span>Onboard New Employee</span>
@@ -515,26 +515,26 @@ export default function EmployeesPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+        <div className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Headcount</span>
-            <div className="text-2xl font-black font-mono text-slate-900 mt-1">{employees.length}</div>
-            <span className="text-[10px] text-slate-500 font-medium">On-roll workforce</span>
+            <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Headcount</span>
+            <div className="text-2xl sm:text-3xl font-black font-mono text-slate-900 mt-1">{employees.length}</div>
+            <span className="text-[9px] sm:text-[10px] text-slate-500 font-medium">On-roll workforce</span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center font-bold">
-            <Users className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center font-bold shrink-0">
+            <Users className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
 
-        <div className="p-5 rounded-3xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
+        <div className="p-4 sm:p-5 rounded-2xl sm:rounded-3xl bg-white border border-slate-200 shadow-xs flex items-center justify-between">
           <div>
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Active Staff</span>
-            <div className="text-2xl font-black font-mono text-emerald-700 mt-1">{activeCount}</div>
-            <span className="text-[10px] text-emerald-600 font-medium">Confirmed employees</span>
+            <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider">Active Staff</span>
+            <div className="text-2xl sm:text-3xl font-black font-mono text-emerald-700 mt-1">{activeCount}</div>
+            <span className="text-[9px] sm:text-[10px] text-emerald-600 font-medium">Confirmed employees</span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
-            <CheckCircle2 className="w-6 h-6" />
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
+            <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
         </div>
 
@@ -787,8 +787,8 @@ export default function EmployeesPage() {
       {/* 6-MODULE ONBOARDING & EDIT MODAL */}
       {/* ========================================================================= */}
       {showModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="bg-white border border-slate-200 rounded-3xl max-w-3xl w-full p-8 shadow-2xl space-y-5 animate-scaleUp text-xs max-h-[92vh] overflow-y-auto">
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-3.5 sm:p-4 animate-fadeIn">
+          <div className="bg-white border border-slate-200 rounded-2xl sm:rounded-3xl max-w-3xl w-full p-4 sm:p-8 shadow-2xl space-y-4 sm:space-y-5 animate-scaleUp text-xs max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b pb-3">
               <div>
                 <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
@@ -805,7 +805,7 @@ export default function EmployeesPage() {
             </div>
 
             {/* 6-Tab Navigator */}
-            <div className="flex flex-wrap gap-1 border-b border-slate-200 pb-2">
+            <div className="flex items-center gap-1.5 border-b border-slate-200 pb-2 overflow-x-auto no-scrollbar py-0.5">
               {[
                 { id: 1, label: '1. Primary Details', icon: User },
                 { id: 2, label: '2. Personal Details', icon: HeartPulse },
@@ -818,7 +818,7 @@ export default function EmployeesPage() {
                   key={tab.id}
                   type="button"
                   onClick={() => setModalTab(tab.id as any)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
                     modalTab === tab.id
                       ? 'bg-[#a92427] text-white shadow-2xs'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'

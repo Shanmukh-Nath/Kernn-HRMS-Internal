@@ -22,8 +22,10 @@ export async function POST(req: NextRequest, context: { params: Promise<{ id: st
       if (body?.rejectionReason) rejectionReason = body.rejectionReason;
     } catch {}
 
-    const approvedById = session?.name || session?.userId || 'system_admin';
-    const result = await processLeaveApproval(id, approvedById, 'REJECTED', rejectionReason);
+    const approvedById = session?.userId || 'system_admin';
+    const approverName = session?.name || session?.userId || 'Super Admin';
+    const approverRole = session?.role || 'SUPER_ADMIN';
+    const result = await processLeaveApproval(id, approvedById, 'REJECTED', rejectionReason, approverName, approverRole);
 
     return NextResponse.json({
       success: true,
