@@ -243,6 +243,13 @@ export async function ensureMongoIndices(): Promise<void> {
     await payroll.createIndex({ id: 1 }, { unique: true });
     await payroll.createIndex({ employeeId: 1, month: 1, year: 1 }, { unique: true });
 
+    const audit = await auditLogsCol();
+    await audit.createIndex({ timestamp: -1 });
+    await audit.createIndex({ 'user.userId': 1, timestamp: -1 });
+    await audit.createIndex({ ip: 1, timestamp: -1 });
+    await audit.createIndex({ eventType: 1, timestamp: -1 });
+    await audit.createIndex({ riskLevel: 1, timestamp: -1 });
+
     console.log('[MongoDB] Indices successfully ensured on Atlas cluster.');
   } catch (error) {
     console.error('[MongoDB] Index creation warning:', error);

@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import { AppLayout } from '@/components/AppLayout';
 import { LoadingProvider } from '@/components/LoadingProvider';
+import { GlobalAuditTracker } from '@/components/GlobalAuditTracker';
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -35,6 +36,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased font-sans text-slate-900 bg-slate-100 min-h-screen">
         <LoadingProvider>
+          <GlobalAuditTracker />
           <AppLayout>{children}</AppLayout>
         </LoadingProvider>
       </body>

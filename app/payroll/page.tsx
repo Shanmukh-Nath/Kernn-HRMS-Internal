@@ -31,6 +31,7 @@ import {
   Check,
 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
+import { downloadPayslipPdf } from '@/lib/generate-payslip-pdf';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -367,6 +368,107 @@ function PayrollContent() {
     }
   };
 
+  const [showDirectGenerator, setShowDirectGenerator] = useState(false);
+  const [generatingDirect, setGeneratingDirect] = useState(false);
+  const [allEmployees, setAllEmployees] = useState<any[]>([]);
+  const [directForm, setDirectForm] = useState({
+    targetType: 'SELF',
+    employeeId: '',
+    employeeName: '',
+    employeeCode: 'KRN-ADM-001',
+    department: 'Executive Directorate',
+    designation: 'Super Administrator',
+    month: new Date().getMonth() + 1,
+    year: new Date().getFullYear(),
+    basicSalary: 60000,
+    hra: 24000,
+    allowances: 16000,
+    pfDeduction: 1800,
+    esiDeduction: 0,
+    ptDeduction: 200,
+    lopDeduction: 0,
+    customDeductions: 0,
+    structureName: 'Executive Leadership Package',
+    auditNotes: 'Super Admin Privileged Clearance — Pre-Approved with Instant Download Authorization',
+  });
+
+  const fetchEmployeesList = async () => {
+    try {
+      const res = await fetch('/api/employees');
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data?.employees)) {
+        setAllEmployees(json.data.employees);
+      }
+    } catch {}
+  };
+
+  const handleGenerateDirectPayslip = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGeneratingDirect(true);
+    try {
+      const calcGross = (Number(directForm.basicSalary) || 0) + (Number(directForm.hra) || 0) + (Number(directForm.allowances) || 0);
+      const calcTotalDed = (Number(directForm.pfDeduction) || 0) + (Number(directForm.esiDeduction) || 0) + (Number(directForm.ptDeduction) || 0) + (Number(directForm.lopDeduction) || 0) + (Number(directForm.customDeductions) || 0);
+      const calcNet = Math.max(0, calcGross - calcTotalDed);
+
+      const targetEmpName = directForm.targetType === 'SELF' ? (currentUser?.name || 'Super Administrator') : directForm.employeeName;
+      const targetEmpId = directForm.targetType === 'SELF' ? (currentUser?.employeeId || currentUser?.userId || 'ADMIN') : directForm.employeeId;
+
+      const payload = {
+        ...directForm,
+        employeeName: targetEmpName,
+        employeeId: targetEmpId,
+        grossSalary: calcGross,
+        totalDeductions: calcTotalDed,
+        netSalary: calcNet,
+      };
+
+      const res = await fetch('/api/payroll/direct-generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const json = await res.json();
+      if (json.success && json.data) {
+        setShowDirectGenerator(false);
+        setSelectedPayslip(json.data);
+        setDownloadApprovalStatus('APPROVED');
+        fetchPayroll();
+
+        // Download the PDF automatically
+        downloadPayslipPdf({
+          employeeName: json.data.employeeName,
+          employeeCode: json.data.employeeCode,
+          department: json.data.employeeDept,
+          designation: json.data.employeeDesig,
+          month: json.data.month,
+          year: json.data.year,
+          structureName: json.data.structureName,
+          basicSalary: json.data.basicSalary,
+          hra: json.data.hra,
+          allowances: json.data.allowances,
+          grossSalary: json.data.grossSalary,
+          pfDeduction: json.data.pfDeduction,
+          esiDeduction: json.data.esiDeduction,
+          ptDeduction: json.data.ptDeduction,
+          lopDeduction: json.data.lopDeduction,
+          customDeductions: json.data.customDeductions,
+          totalDeductions: json.data.totalDeductions,
+          netSalary: json.data.netSalary,
+          auditNotes: json.data.auditNotes,
+          generatedBy: currentUser?.name || 'Super Administrator',
+          isSuperAdminDirect: true,
+        });
+      } else {
+        alert(json.error?.message || 'Failed to generate direct payslip');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error generating payslip');
+    } finally {
+      setGeneratingDirect(false);
+    }
+  };
+
   const totalDisbursement = records.reduce((sum, r) => sum + (r.netSalary || 0), 0);
   const totalPfDeduction = records.reduce((sum, r) => sum + (r.pfDeduction || 0), 0);
   const totalEsiDeduction = records.reduce((sum, r) => sum + (r.esiDeduction || 0), 0);
@@ -396,29 +498,45 @@ function PayrollContent() {
           </p>
         </div>
 
-        {/* Month Selector */}
-        {activeTab === 'REGISTER' && (
-          <div className="flex items-center gap-2 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80 text-xs">
-            <Calendar className="w-4 h-4 text-slate-500 ml-2" />
-            <select
-              value={month}
-              onChange={(e) => setMonth(Number(e.target.value))}
-              className="bg-transparent font-medium focus:outline-none text-slate-800"
+        <div className="flex flex-wrap items-center gap-2.5">
+          {isSuperAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                fetchEmployeesList();
+                setShowDirectGenerator(true);
+              }}
+              className="px-4 py-2 rounded-2xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
             >
-              {MONTH_NAMES.map((mName, idx) => (
-                <option key={idx} value={idx + 1}>{mName}</option>
-              ))}
-            </select>
-            <select
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
-              className="bg-transparent font-mono font-medium focus:outline-none text-slate-800"
-            >
-              <option value={2026}>2026</option>
-              <option value={2025}>2025</option>
-            </select>
-          </div>
-        )}
+              <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+              <span>Apply & Generate Payslip</span>
+            </button>
+          )}
+
+          {/* Month Selector */}
+          {activeTab === 'REGISTER' && (
+            <div className="flex items-center gap-2 bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/80 text-xs">
+              <Calendar className="w-4 h-4 text-slate-500 ml-2" />
+              <select
+                value={month}
+                onChange={(e) => setMonth(Number(e.target.value))}
+                className="bg-transparent font-medium focus:outline-none text-slate-800"
+              >
+                {MONTH_NAMES.map((mName, idx) => (
+                  <option key={idx} value={idx + 1}>{mName}</option>
+                ))}
+              </select>
+              <select
+                value={year}
+                onChange={(e) => setYear(Number(e.target.value))}
+                className="bg-transparent font-mono font-medium focus:outline-none text-slate-800"
+              >
+                <option value={2026}>2026</option>
+                <option value={2025}>2025</option>
+              </select>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Primary 3-Tab Navigator (Only for Payroll Admins) */}
@@ -504,6 +622,20 @@ function PayrollContent() {
                 >
                   <Lock className="w-3.5 h-3.5" />
                   <span>Approve & Lock Payroll</span>
+                </button>
+              )}
+
+              {isSuperAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    fetchEmployeesList();
+                    setShowDirectGenerator(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white text-xs font-bold rounded-xl shadow-xs transition active:scale-95 cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                  <span>Direct Payslip Generator</span>
                 </button>
               )}
 
@@ -1495,32 +1627,356 @@ function PayrollContent() {
               </div>
             )}
 
-            <div className="flex gap-2">
+            <div className="flex flex-wrap sm:flex-nowrap gap-2">
               {currentUser?.role === 'EMPLOYEE' && downloadApprovalStatus !== 'APPROVED' ? (
                 <button
                   onClick={handleRequestDownload}
                   disabled={requestingDownload || downloadApprovalStatus === 'PENDING'}
-                  className="w-1/2 py-2.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  className="w-full sm:w-1/2 py-2.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>{downloadApprovalStatus === 'PENDING' ? 'Download Awaiting Sign-off' : 'Request Download Approval'}</span>
                 </button>
               ) : (
-                <button
-                  onClick={() => window.print()}
-                  className="w-1/2 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm"
-                >
-                  <Printer className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Download / Print Official Payslip</span>
-                </button>
+                <>
+                  <button
+                    onClick={() => {
+                      downloadPayslipPdf({
+                        employeeName: selectedPayslip.employeeName,
+                        employeeCode: selectedPayslip.employeeCode,
+                        department: selectedPayslip.employeeDept,
+                        designation: selectedPayslip.employeeDesig,
+                        month: selectedPayslip.month || month,
+                        year: selectedPayslip.year || year,
+                        structureName: selectedPayslip.structureName,
+                        basicSalary: selectedPayslip.basicSalary,
+                        hra: selectedPayslip.hra,
+                        allowances: selectedPayslip.allowances,
+                        grossSalary: selectedPayslip.grossSalary,
+                        pfDeduction: selectedPayslip.pfDeduction,
+                        esiDeduction: selectedPayslip.esiDeduction,
+                        ptDeduction: selectedPayslip.ptDeduction,
+                        lopDeduction: selectedPayslip.lopDeduction,
+                        customDeductions: selectedPayslip.customDeductions,
+                        totalDeductions: selectedPayslip.totalDeductions || ((selectedPayslip.pfDeduction || 0) + (selectedPayslip.esiDeduction || 0) + (selectedPayslip.ptDeduction || 0) + (selectedPayslip.lopDeduction || 0)),
+                        netSalary: selectedPayslip.netSalary,
+                        auditNotes: selectedPayslip.auditNotes,
+                        generatedBy: currentUser?.name || 'Super Administrator',
+                        isSuperAdminDirect: isSuperAdmin,
+                      });
+                    }}
+                    className="flex-1 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download PDF Directly</span>
+                  </button>
+                  <button
+                    onClick={() => window.print()}
+                    className="flex-1 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm active:scale-95 cursor-pointer"
+                  >
+                    <Printer className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Print Payslip</span>
+                  </button>
+                </>
               )}
               <button
                 onClick={() => setSelectedPayslip(null)}
-                className="w-1/2 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition"
+                className="py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition cursor-pointer"
               >
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Super Admin Direct Payslip Generator Modal */}
+      {showDirectGenerator && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm p-4 animate-fadeIn"
+          onClick={() => setShowDirectGenerator(false)}
+        >
+          <div
+            className="bg-white border border-slate-200 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl space-y-6 max-h-[92vh] overflow-y-auto animate-scaleUp text-xs"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center font-bold">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 tracking-tight">
+                    Super Admin Direct Payslip Generator
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Apply, generate and directly download certified payslips with pre-approved clearance (Zero approvals needed).
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDirectGenerator(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Privilege Notice */}
+            <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs flex items-center gap-2.5">
+              <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+              <div>
+                <strong className="block">Direct Super Admin Clearance Active:</strong>
+                <span>
+                  This payslip is certified and locked automatically. No supervisor or secondary manager sign-off is required.
+                </span>
+              </div>
+            </div>
+
+            <form onSubmit={handleGenerateDirectPayslip} className="space-y-4">
+              {/* Target & Period Row */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Target Recipient</label>
+                  <select
+                    value={directForm.targetType}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === 'SELF') {
+                        setDirectForm((prev) => ({
+                          ...prev,
+                          targetType: 'SELF',
+                          employeeId: currentUser?.employeeId || currentUser?.userId || 'ADMIN',
+                          employeeName: currentUser?.name || 'Super Administrator',
+                          employeeCode: 'KRN-ADM-001',
+                          department: 'Executive Office',
+                          designation: 'Super Administrator',
+                        }));
+                      } else {
+                        const emp = allEmployees.find((x) => x.id === val || x._id === val);
+                        setDirectForm((prev) => ({
+                          ...prev,
+                          targetType: val,
+                          employeeId: emp?.id || val,
+                          employeeName: emp?.name || '',
+                          employeeCode: emp?.employeeCode || 'EMP',
+                          department: emp?.department || 'Operations',
+                          designation: emp?.designation || 'Specialist',
+                        }));
+                      }
+                    }}
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 font-semibold focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  >
+                    <option value="SELF">Myself (Super Administrator)</option>
+                    {allEmployees.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name} ({emp.employeeCode || emp.department})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Disbursement Month</label>
+                  <select
+                    value={directForm.month}
+                    onChange={(e) => setDirectForm((prev) => ({ ...prev, month: Number(e.target.value) }))}
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 font-semibold focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  >
+                    {MONTH_NAMES.map((name, idx) => (
+                      <option key={idx} value={idx + 1}>{name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Disbursement Year</label>
+                  <select
+                    value={directForm.year}
+                    onChange={(e) => setDirectForm((prev) => ({ ...prev, year: Number(e.target.value) }))}
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-900 font-semibold focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                  >
+                    <option value={2026}>2026</option>
+                    <option value={2025}>2025</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Employee Custom Details */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-600 text-[11px] mb-1">Display Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={directForm.employeeName}
+                    onChange={(e) => setDirectForm((prev) => ({ ...prev, employeeName: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-600 text-[11px] mb-1">Emp Code</label>
+                  <input
+                    type="text"
+                    required
+                    value={directForm.employeeCode}
+                    onChange={(e) => setDirectForm((prev) => ({ ...prev, employeeCode: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 font-mono font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-600 text-[11px] mb-1">Department</label>
+                  <input
+                    type="text"
+                    value={directForm.department}
+                    onChange={(e) => setDirectForm((prev) => ({ ...prev, department: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-600 text-[11px] mb-1">Designation</label>
+                  <input
+                    type="text"
+                    value={directForm.designation}
+                    onChange={(e) => setDirectForm((prev) => ({ ...prev, designation: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900"
+                  />
+                </div>
+              </div>
+
+              {/* Itemized Earnings & Deductions Breakdown */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Earnings */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                  <span className="font-bold text-slate-900 text-xs text-emerald-800 block border-b pb-1">Itemized Earnings (INR)</span>
+                  <div className="space-y-2">
+                    <div>
+                      <span className="text-slate-500 text-[11px] block">Basic Salary</span>
+                      <input
+                        type="number"
+                        value={directForm.basicSalary}
+                        onChange={(e) => setDirectForm((prev) => ({ ...prev, basicSalary: Number(e.target.value) }))}
+                        className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-200 font-mono font-bold"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-slate-500 text-[11px] block">House Rent Allowance (HRA)</span>
+                      <input
+                        type="number"
+                        value={directForm.hra}
+                        onChange={(e) => setDirectForm((prev) => ({ ...prev, hra: Number(e.target.value) }))}
+                        className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-200 font-mono font-bold"
+                      />
+                    </div>
+                    <div>
+                      <span className="text-slate-500 text-[11px] block">Special & Other Allowances</span>
+                      <input
+                        type="number"
+                        value={directForm.allowances}
+                        onChange={(e) => setDirectForm((prev) => ({ ...prev, allowances: Number(e.target.value) }))}
+                        className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-200 font-mono font-bold"
+                      />
+                    </div>
+                    <div className="pt-1 border-t flex justify-between font-bold text-emerald-700">
+                      <span>Gross Total:</span>
+                      <span className="font-mono">
+                        ₹{((directForm.basicSalary || 0) + (directForm.hra || 0) + (directForm.allowances || 0)).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Deductions */}
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
+                  <span className="font-bold text-slate-900 text-xs text-rose-800 block border-b pb-1">Statutory Deductions (INR)</span>
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <span className="text-slate-500 text-[11px] block">PF (12%)</span>
+                        <input
+                          type="number"
+                          value={directForm.pfDeduction}
+                          onChange={(e) => setDirectForm((prev) => ({ ...prev, pfDeduction: Number(e.target.value) }))}
+                          className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 font-mono font-bold"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-slate-500 text-[11px] block">ESIC Fund</span>
+                        <input
+                          type="number"
+                          value={directForm.esiDeduction}
+                          onChange={(e) => setDirectForm((prev) => ({ ...prev, esiDeduction: Number(e.target.value) }))}
+                          className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 font-mono font-bold"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <span className="text-slate-500 text-[11px] block">Prof Tax (PT)</span>
+                        <input
+                          type="number"
+                          value={directForm.ptDeduction}
+                          onChange={(e) => setDirectForm((prev) => ({ ...prev, ptDeduction: Number(e.target.value) }))}
+                          className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 font-mono font-bold"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-slate-500 text-[11px] block">Loss of Pay (LOP)</span>
+                        <input
+                          type="number"
+                          value={directForm.lopDeduction}
+                          onChange={(e) => setDirectForm((prev) => ({ ...prev, lopDeduction: Number(e.target.value) }))}
+                          className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 font-mono font-bold"
+                        />
+                      </div>
+                    </div>
+                    <div className="pt-1 border-t flex justify-between font-bold text-rose-700">
+                      <span>Total Deductions:</span>
+                      <span className="font-mono">
+                        ₹{((directForm.pfDeduction || 0) + (directForm.esiDeduction || 0) + (directForm.ptDeduction || 0) + (directForm.lopDeduction || 0) + (directForm.customDeductions || 0)).toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Net Remuneration Banner */}
+              {(() => {
+                const gross = (Number(directForm.basicSalary) || 0) + (Number(directForm.hra) || 0) + (Number(directForm.allowances) || 0);
+                const ded = (Number(directForm.pfDeduction) || 0) + (Number(directForm.esiDeduction) || 0) + (Number(directForm.ptDeduction) || 0) + (Number(directForm.lopDeduction) || 0) + (Number(directForm.customDeductions) || 0);
+                const net = Math.max(0, gross - ded);
+                return (
+                  <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                    <div>
+                      <span className="text-emerald-900 font-bold block text-xs">Calculated Net Take-Home Salary:</span>
+                      <span className="text-slate-500 text-[11px]">Instant clearance granted without supervisor approval</span>
+                    </div>
+                    <div className="text-2xl font-black font-mono text-emerald-700">
+                      ₹{net.toLocaleString('en-IN')}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowDirectGenerator(false)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={generatingDirect}
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white font-bold transition shadow-sm flex items-center gap-2 disabled:opacity-50 cursor-pointer active:scale-95"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>{generatingDirect ? 'Generating...' : 'Generate & Download Directly'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

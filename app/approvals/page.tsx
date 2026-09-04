@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   CheckCircle2,
   XCircle,
@@ -113,6 +114,36 @@ function ApprovalMobileCard({
             &ldquo;{item.reason}&rdquo;
           </div>
         )}
+        {item.category === 'REGULARIZATION' && item.rawItem && (
+          <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-slate-200/60 font-sans">
+            <div>
+              <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400 block mb-1">Terminal Scans</span>
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-[10px]">
+                  <span className="text-[8px] font-black text-slate-500 bg-slate-200 px-1 py-0.2 rounded font-sans">IN</span>
+                  <span className="font-mono font-semibold text-slate-700">{item.rawItem.recordedCheckIn || '--:--'}</span>
+                </div>
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-[10px]">
+                  <span className="text-[8px] font-black text-slate-500 bg-slate-200 px-1 py-0.2 rounded font-sans">OUT</span>
+                  <span className="font-mono font-semibold text-slate-700">{item.rawItem.recordedCheckOut || '--:--'}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <span className="text-[9px] font-extrabold uppercase tracking-wider text-emerald-700 block mb-1">Requested Times</span>
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200 text-[10px]">
+                  <span className="text-[8px] font-black text-emerald-700 bg-emerald-100 px-1 py-0.2 rounded font-sans">IN</span>
+                  <span className="font-mono font-bold text-emerald-950">{item.rawItem.requestedCheckIn || '--:--'}</span>
+                </div>
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-[10px]">
+                  <span className="text-[8px] font-black text-indigo-700 bg-indigo-100 px-1 py-0.2 rounded font-sans">OUT</span>
+                  <span className="font-mono font-bold text-indigo-950">{item.rawItem.requestedCheckOut || '--:--'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         {item.proofDocumentUrl && onPreviewDoc && (
           <button
             onClick={() => onPreviewDoc({ name: item.proofDocumentName || 'Proof Certificate', url: item.proofDocumentUrl, employeeName: item.employeeName })}
@@ -190,8 +221,14 @@ function ApprovalMobileCard({
   );
 }
 
-export default function ApprovalsPage() {
-  const [activeTab, setActiveTab] = useState<'ALL' | 'LEAVES' | 'REGULARIZATIONS' | 'PAYSLIPS'>('ALL');
+function ApprovalsContent() {
+  const searchParams = useSearchParams();
+  const urlTab = searchParams.get('tab')?.toUpperCase();
+  const initialTab = ['ALL', 'LEAVES', 'REGULARIZATIONS', 'PAYSLIPS'].includes(urlTab || '') ? (urlTab as any) : 'ALL';
+  const urlStatus = searchParams.get('status')?.toUpperCase();
+  const initialStatus = ['ALL', 'PENDING', 'APPROVED', 'REJECTED'].includes(urlStatus || '') ? (urlStatus as any) : 'PENDING';
+
+  const [activeTab, setActiveTab] = useState<'ALL' | 'LEAVES' | 'REGULARIZATIONS' | 'PAYSLIPS'>(initialTab);
   const [leaves, setLeaves] = useState<any[]>([]);
   const [regularizations, setRegularizations] = useState<any[]>([]);
   const [payslips, setPayslips] = useState<any[]>([]);
@@ -200,7 +237,7 @@ export default function ApprovalsPage() {
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('PENDING');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>(initialStatus);
 
   // Detail & Action Modals
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
@@ -543,6 +580,54 @@ export default function ApprovalsPage() {
     // Sort newest first
     return unified.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
   }, [leaves, regularizations, payslips]);
+
+  // Auto-open requested item from URL query parameters (e.g. from Notifications)
+  const [lastHandledId, setLastHandledId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const targetId = searchParams.get('id');
+    const targetStatus = searchParams.get('status')?.toUpperCase();
+    const targetTab = searchParams.get('tab')?.toUpperCase();
+
+    if (targetTab && ['ALL', 'LEAVES', 'REGULARIZATIONS', 'PAYSLIPS'].includes(targetTab)) {
+      setActiveTab(targetTab as any);
+    }
+    if (targetStatus && ['ALL', 'PENDING', 'APPROVED', 'REJECTED'].includes(targetStatus)) {
+      setStatusFilter(targetStatus as any);
+    }
+
+    if (!targetId || allItems.length === 0 || lastHandledId === targetId) return;
+
+    // Find matching item in allItems by id, raw id, or mongo _id
+    const matched = allItems.find(
+      (i) =>
+        i.id === targetId ||
+        String(i.id) === targetId ||
+        i.rawItem?.id === targetId ||
+        String(i.rawItem?._id) === targetId ||
+        (targetId.length >= 6 && (String(i.id).includes(targetId) || String(i.rawItem?._id).includes(targetId)))
+    );
+
+    if (matched) {
+      setSelectedItem(matched);
+      setLastHandledId(targetId);
+
+      if (matched.status) {
+        setStatusFilter(matched.status as any);
+      }
+      if (matched.category) {
+        setActiveTab(
+          matched.category === 'REGULARIZATION'
+            ? 'REGULARIZATIONS'
+            : matched.category === 'LEAVE'
+            ? 'LEAVES'
+            : matched.category === 'PAYSLIP'
+            ? 'PAYSLIPS'
+            : 'ALL'
+        );
+      }
+    }
+  }, [searchParams, allItems, lastHandledId]);
 
   // Counts
   const pendingLeavesCount = leaves.filter((r) => r.status === 'PENDING').length;
@@ -1785,18 +1870,59 @@ export default function ApprovalsPage() {
                               <td className="py-4 px-6 font-mono font-bold text-slate-800">
                                 {format(new Date(r.date), 'dd MMM yyyy')}
                               </td>
-                              <td className="py-4 px-6 font-mono">
-                                <span className="px-2.5 py-1 rounded bg-slate-100 text-slate-700 font-semibold">
-                                  {r.recordedCheckIn ? `${r.recordedCheckIn}` : 'No Punch Detected'}
-                                </span>
+                              {/* Terminal Recorded Time */}
+                              <td className="py-3.5 px-6 whitespace-nowrap">
+                                {!r.recordedCheckIn && !r.recordedCheckOut ? (
+                                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100/90 text-slate-500 text-[11px] font-medium border border-slate-200/80">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                    <span>No Punch Detected</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-col gap-1 w-fit">
+                                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100/90 border border-slate-200/90 text-[11px]">
+                                      <span className="font-extrabold text-[9px] uppercase tracking-wider text-slate-500 bg-slate-200/80 px-1.5 py-0.2 rounded font-sans">
+                                        IN
+                                      </span>
+                                      <span className="font-mono font-bold text-slate-700">
+                                        {r.recordedCheckIn || '--:--'}
+                                      </span>
+                                    </div>
+                                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100/90 border border-slate-200/90 text-[11px]">
+                                      <span className="font-extrabold text-[9px] uppercase tracking-wider text-slate-500 bg-slate-200/80 px-1.5 py-0.2 rounded font-sans">
+                                        OUT
+                                      </span>
+                                      <span className="font-mono font-bold text-slate-700">
+                                        {r.recordedCheckOut || '--:--'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                )}
                               </td>
-                              <td className="py-4 px-6 font-mono">
-                                <span className="px-2.5 py-1 rounded bg-blue-50 text-blue-800 font-bold border border-blue-200">
-                                  In: {r.requestedCheckIn || '--:--'} | Out: {r.requestedCheckOut || '--:--'}
-                                </span>
+
+                              {/* Requested Corrected Time */}
+                              <td className="py-3.5 px-6 whitespace-nowrap">
+                                <div className="flex flex-col gap-1 w-fit">
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200/90 text-[11px] shadow-2xs">
+                                    <span className="font-black text-[9px] uppercase tracking-wider text-emerald-700 bg-emerald-100/90 px-1.5 py-0.2 rounded font-sans">
+                                      IN
+                                    </span>
+                                    <span className="font-mono font-bold text-emerald-950">
+                                      {r.requestedCheckIn || '--:--'}
+                                    </span>
+                                  </div>
+                                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-indigo-50 border border-indigo-200/90 text-[11px] shadow-2xs">
+                                    <span className="font-black text-[9px] uppercase tracking-wider text-indigo-700 bg-indigo-100/90 px-1.5 py-0.2 rounded font-sans">
+                                      OUT
+                                    </span>
+                                    <span className="font-mono font-bold text-indigo-950">
+                                      {r.requestedCheckOut || '--:--'}
+                                    </span>
+                                  </div>
+                                </div>
                               </td>
+
                               <td className="py-4 px-6 max-w-xs text-slate-600">
-                                <div className="truncate" title={r.reason}>{r.reason}</div>
+                                <div className="truncate font-medium text-slate-800" title={r.reason}>{r.reason}</div>
                                 {r.rejectionReason && (
                                   <div className="text-[10px] text-rose-600 italic mt-0.5">Rejected: {r.rejectionReason}</div>
                                 )}
@@ -1844,12 +1970,43 @@ export default function ApprovalsPage() {
                               </td>
                               <td className="py-4 px-6 text-right whitespace-nowrap">
                                 <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    onClick={() => {
+                                      const unified = allItems.find((itm) => itm.id === r.id) || {
+                                        id: r.id,
+                                        category: 'REGULARIZATION',
+                                        employeeId: r.employeeId,
+                                        employeeName: r.employeeName || 'Employee',
+                                        employeeCode: r.employeeCode || 'EMP',
+                                        department: r.department || 'Operations',
+                                        title: `Attendance Time Correction (${format(new Date(r.date), 'dd MMM yyyy')})`,
+                                        subtitle: `Req: ${r.requestedCheckIn || '--:--'} - ${r.requestedCheckOut || '--:--'} (Rec: ${r.recordedCheckIn || 'None'})`,
+                                        reason: r.reason,
+                                        status: r.status,
+                                        rejectionReason: r.rejectionReason,
+                                        decisionRemarks: r.decisionRemarks || r.rejectionReason,
+                                        approvedById: r.reviewedBy,
+                                        approvedByName: r.reviewedByName || r.reviewedBy,
+                                        approvedByRole: r.reviewedByRole || 'Supervisor',
+                                        reviewedAt: r.reviewedAt,
+                                        createdAt: r.createdAt,
+                                        rawItem: r,
+                                      };
+                                      setSelectedItem(unified);
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition flex items-center gap-1 cursor-pointer"
+                                    title="View full request details and audit trail"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                    <span>Details</span>
+                                  </button>
+
                                   {isSupervisor && isPending && (
                                     <>
                                       <button
                                         onClick={() => handleApproveReg(r.id)}
                                         disabled={actionLoading}
-                                        className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition flex items-center gap-1 shadow-2xs"
+                                        className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition flex items-center gap-1 shadow-2xs cursor-pointer"
                                       >
                                         <Check className="w-3.5 h-3.5" />
                                         <span>Regularize</span>
@@ -1860,7 +2017,7 @@ export default function ApprovalsPage() {
                                           setRejectionReason('');
                                         }}
                                         disabled={actionLoading}
-                                        className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs transition"
+                                        className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs transition cursor-pointer"
                                       >
                                         <X className="w-3.5 h-3.5" />
                                         <span>Reject</span>
@@ -1885,7 +2042,7 @@ export default function ApprovalsPage() {
                                         setDecisionRemarks('');
                                       }}
                                       disabled={actionLoading}
-                                      className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-xs transition flex items-center gap-1 shadow-2xs"
+                                      className="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-xs transition flex items-center gap-1 shadow-2xs cursor-pointer"
                                       title="Change decision on this attendance request"
                                     >
                                       <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
@@ -2313,18 +2470,54 @@ export default function ApprovalsPage() {
 
               {/* Attendance Regularization Punch Comparison */}
               {selectedItem.category === 'REGULARIZATION' && (
-                <div className="p-3.5 rounded-2xl bg-blue-50/50 border border-blue-200 grid grid-cols-2 gap-3 font-mono">
-                  <div>
-                    <span className="text-slate-500 block text-[10px] uppercase font-bold font-sans">Raw Machine Scan</span>
-                    <span className="text-slate-700 font-bold text-xs">
-                      {selectedItem.rawItem?.recordedCheckIn ? `${selectedItem.rawItem.recordedCheckIn}` : 'No Punch Detected'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-blue-800 block text-[10px] uppercase font-bold font-sans">Requested Adjustment</span>
-                    <span className="text-blue-900 font-bold text-xs">
-                      {selectedItem.rawItem?.requestedCheckIn || '--:--'} - {selectedItem.rawItem?.requestedCheckOut || '--:--'}
-                    </span>
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+                  <span className="text-[10px] uppercase font-black tracking-wider text-slate-500 block">
+                    Biometric Scans vs Requested Time Correction
+                  </span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Machine Scans */}
+                    <div className="p-3 rounded-xl bg-white border border-slate-200/90 shadow-2xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase text-slate-400">Terminal Scans (Raw)</span>
+                        <span className="text-[9px] font-semibold px-2 py-0.5 rounded bg-slate-100 text-slate-600">Secureye Sensor</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 font-mono">
+                        <div className="p-2 rounded-lg bg-slate-50 border border-slate-200/80">
+                          <span className="text-[9px] font-black uppercase text-slate-400 block font-sans">PUNCH IN</span>
+                          <span className="text-xs font-bold text-slate-800">
+                            {selectedItem.rawItem?.recordedCheckIn || '--:--'}
+                          </span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-slate-50 border border-slate-200/80">
+                          <span className="text-[9px] font-black uppercase text-slate-400 block font-sans">PUNCH OUT</span>
+                          <span className="text-xs font-bold text-slate-800">
+                            {selectedItem.rawItem?.recordedCheckOut || '--:--'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Requested Correction */}
+                    <div className="p-3 rounded-xl bg-blue-50/40 border border-blue-200 shadow-2xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold uppercase text-blue-700">Requested Correction</span>
+                        <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800">Manual Variance</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 font-mono">
+                        <div className="p-2 rounded-lg bg-emerald-50 border border-emerald-200">
+                          <span className="text-[9px] font-black uppercase text-emerald-700 block font-sans">CORRECTED IN</span>
+                          <span className="text-xs font-bold text-emerald-950">
+                            {selectedItem.rawItem?.requestedCheckIn || '--:--'}
+                          </span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-indigo-50 border border-indigo-200">
+                          <span className="text-[9px] font-black uppercase text-indigo-700 block font-sans">CORRECTED OUT</span>
+                          <span className="text-xs font-bold text-indigo-950">
+                            {selectedItem.rawItem?.requestedCheckOut || '--:--'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -2373,10 +2566,76 @@ export default function ApprovalsPage() {
               )}
             </div>
 
-            <div className="flex justify-end pt-2 border-t">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t">
+              <div className="flex items-center gap-2">
+                {isSupervisor && selectedItem.status === 'PENDING' && (
+                  <>
+                    <button
+                      type="button"
+                      disabled={actionLoading}
+                      onClick={async () => {
+                        const itm = selectedItem;
+                        setSelectedItem(null);
+                        if (itm.category === 'LEAVE') await handleApproveLeave(itm.id);
+                        else if (itm.category === 'REGULARIZATION') await handleApproveReg(itm.id);
+                        else if (itm.category === 'PAYSLIP') await handleApprovePayslip(itm.id);
+                      }}
+                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-xs flex items-center gap-1.5"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>Authorize / Approve</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={actionLoading}
+                      onClick={() => {
+                        const itm = selectedItem;
+                        setSelectedItem(null);
+                        setRejectingItem({
+                          type: itm.category === 'REGULARIZATION' ? 'REG' : itm.category === 'PAYSLIP' ? 'PAYSLIP' : 'LEAVE',
+                          id: itm.id,
+                        });
+                        setRejectionReason('');
+                      }}
+                      className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs transition flex items-center gap-1.5"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                      <span>Deny / Reject</span>
+                    </button>
+                  </>
+                )}
+
+                {isSupervisor && selectedItem.status !== 'PENDING' && (
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    onClick={() => {
+                      const itm = selectedItem;
+                      setSelectedItem(null);
+                      setChangeDecisionItem({
+                        id: itm.id,
+                        category: itm.category,
+                        title: itm.title,
+                        employeeName: itm.employeeName,
+                        status: itm.status,
+                        approvedByName: itm.approvedByName,
+                        rejectionReason: itm.rejectionReason,
+                        decisionRemarks: itm.decisionRemarks,
+                      });
+                      setNewDecisionAction(itm.status === 'APPROVED' ? 'REJECTED' : 'APPROVED');
+                      setDecisionRemarks('');
+                    }}
+                    className="px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-xs transition flex items-center gap-1.5 shadow-2xs"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Change Decision</span>
+                  </button>
+                )}
+              </div>
+
               <button
                 onClick={() => setSelectedItem(null)}
-                className="px-5 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition"
+                className="px-5 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 transition ml-auto"
               >
                 Close Inspection
               </button>
@@ -2424,5 +2683,13 @@ export default function ApprovalsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ApprovalsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500 font-semibold">Loading Approvals Hub...</div>}>
+      <ApprovalsContent />
+    </Suspense>
   );
 }

@@ -24,6 +24,7 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   ShieldCheck,
+  History,
   X,
 } from 'lucide-react';
 
@@ -37,6 +38,7 @@ export function Sidebar({ isOpen = false, onClose, sessionUser: propUser }: Side
   const pathname = usePathname();
   const router = useRouter();
   const [internalUser, setInternalUser] = useState<any | null>(null);
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState<number>(0);
 
   const sessionUser = propUser !== undefined ? propUser : internalUser;
 
@@ -51,6 +53,16 @@ export function Sidebar({ isOpen = false, onClose, sessionUser: propUser }: Side
         })
         .catch(() => {});
     }
+
+    // Fetch pending approvals count to show/hide "Action Required" badge dynamically
+    fetch('/api/approvals/count')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success && typeof d.count === 'number') {
+          setPendingApprovalsCount(d.count);
+        }
+      })
+      .catch(() => {});
   }, [pathname, propUser]);
 
   const handleLogout = async () => {
@@ -86,8 +98,14 @@ export function Sidebar({ isOpen = false, onClose, sessionUser: propUser }: Side
           title: 'PEOPLE & WORKFORCE',
           items: [
             { name: 'Employee Directory', href: '/employees', icon: Users },
-            { name: 'Approvals Hub', href: '/approvals', icon: CheckCircle2, badge: 'Action Required', highlight: true },
-            { name: 'Leave Policies & Accruals', href: '/leaves?tab=POLICIES', icon: Palmtree, badge: 'Policy Engine' },
+            {
+              name: 'Approvals Hub',
+              href: '/approvals',
+              icon: CheckCircle2,
+              badge: pendingApprovalsCount > 0 ? 'Action Required' : undefined,
+              highlight: pendingApprovalsCount > 0,
+            },
+            { name: 'Leave Policies & Accruals', href: '/leaves?tab=POLICIES', icon: Palmtree },
             { name: 'Public Holidays', href: '/holidays', icon: Calendar },
             { name: 'Notice Board', href: '/announcements', icon: Megaphone },
           ],
@@ -95,7 +113,8 @@ export function Sidebar({ isOpen = false, onClose, sessionUser: propUser }: Side
         {
           title: 'FINANCE & SECURITY',
           items: [
-            { name: 'Payroll Register', href: '/payroll', icon: DollarSign },
+            { name: 'Payroll & Payslips', href: '/payroll', icon: DollarSign },
+            { name: 'Audit Trail & Forensics', href: '/audit', icon: History, badge: 'Live' },
             { name: 'Passkey Credentials', href: '/settings/passkeys', icon: Fingerprint },
             { name: 'RBAC Roles Matrix', href: '/roles', icon: Shield },
             { name: 'System Settings', href: '/settings', icon: Settings2 },
@@ -125,8 +144,14 @@ export function Sidebar({ isOpen = false, onClose, sessionUser: propUser }: Side
           title: 'PEOPLE & WORKFORCE',
           items: [
             { name: 'Employee Directory', href: '/employees', icon: Users },
-            { name: 'Approvals Hub', href: '/approvals', icon: CheckCircle2, badge: 'All Types', highlight: true },
-            { name: 'Leave Policies & Accruals', href: '/leaves?tab=POLICIES', icon: Palmtree, badge: 'Policy Engine' },
+            {
+              name: 'Approvals Hub',
+              href: '/approvals',
+              icon: CheckCircle2,
+              badge: pendingApprovalsCount > 0 ? 'Action Required' : undefined,
+              highlight: pendingApprovalsCount > 0,
+            },
+            { name: 'Leave Policies & Accruals', href: '/leaves?tab=POLICIES', icon: Palmtree },
             { name: 'Public Holidays', href: '/holidays', icon: Calendar },
             { name: 'Notice Board', href: '/announcements', icon: Megaphone },
           ],
@@ -135,6 +160,7 @@ export function Sidebar({ isOpen = false, onClose, sessionUser: propUser }: Side
           title: 'FINANCE & COMPLIANCE',
           items: [
             { name: 'Payroll Register', href: '/payroll', icon: DollarSign },
+            { name: 'Audit Trail & Forensics', href: '/audit', icon: History, badge: 'Live' },
             { name: 'Passkey Credentials', href: '/settings/passkeys', icon: Fingerprint },
             { name: 'System Settings', href: '/settings', icon: Settings2 },
           ],
@@ -149,7 +175,13 @@ export function Sidebar({ isOpen = false, onClose, sessionUser: propUser }: Side
           items: [
             { name: 'Dashboard', href: '/', icon: LayoutDashboard },
             { name: "Team Attendance", href: '/daily-attendance', icon: CalendarCheck, highlight: true },
-            { name: 'Approvals Hub', href: '/approvals', icon: CheckCircle2, badge: 'Team', highlight: true },
+            {
+              name: 'Approvals Hub',
+              href: '/approvals',
+              icon: CheckCircle2,
+              badge: pendingApprovalsCount > 0 ? 'Action Required' : undefined,
+              highlight: pendingApprovalsCount > 0,
+            },
           ],
         },
         {

@@ -144,9 +144,33 @@ export function Navbar({ onToggleSidebar, isSidebarOpen }: NavbarProps = {}) {
       setUnreadCount((prev) => Math.max(0, prev - 1));
     }
     setShowNotifs(false);
-    if (notif.link) {
-      router.push(notif.link);
+
+    let destination = notif.link || '/';
+
+    // Parse and enrich legacy or raw links
+    if (destination === '/approvals' || destination.startsWith('/approvals?')) {
+      const parts = String(notif.id || '').split('_');
+      const prefix = parts[0]; // 'reg', 'leave', 'pdr', 'ann'
+      const extractedId = notif.targetId || parts[1] || '';
+      const status = notif.status || notif.targetStatus || (parts.length >= 3 ? parts[2] : 'ALL');
+
+      const tab =
+        notif.type === 'REGULARIZATION' || prefix === 'reg' ? 'REGULARIZATIONS' :
+        notif.type === 'LEAVE' || prefix === 'leave' ? 'LEAVES' :
+        notif.type === 'PAYSLIP' || prefix === 'pdr' ? 'PAYSLIPS' : 'ALL';
+
+      if (!destination.includes('id=')) {
+        destination = `/approvals?tab=${tab}&status=${status}&id=${extractedId}`;
+      }
+    } else if (destination === '/announcements' || destination.startsWith('/announcements?')) {
+      const parts = String(notif.id || '').split('_');
+      const extractedId = notif.targetId || (parts.length > 1 ? parts[1] : '');
+      if (extractedId && !destination.includes('id=')) {
+        destination = `/announcements?id=${extractedId}`;
+      }
     }
+
+    router.push(destination);
   };
 
   const handleLogout = async () => {

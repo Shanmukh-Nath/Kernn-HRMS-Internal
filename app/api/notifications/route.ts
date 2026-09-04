@@ -49,17 +49,19 @@ export async function GET(req: NextRequest) {
       .toArray();
 
     announcements.forEach((a) => {
-      const notifId = `ann_${a.id || a._id}`;
+      const annId = a.id || a._id?.toString();
+      const notifId = `ann_${annId}`;
       notifications.push({
         id: notifId,
         type: 'ANNOUNCEMENT',
+        targetId: annId,
         title: a.title,
         message: a.content ? a.content.substring(0, 120) + (a.content.length > 120 ? '...' : '') : '',
         priority: a.priority || 'NORMAL',
         author: a.authorName || 'HR Administration',
         timestamp: a.publishedAt || a.createdAt,
         timeAgo: a.publishedAt ? formatDistanceToNow(new Date(a.publishedAt), { addSuffix: true }) : '',
-        link: '/announcements',
+        link: `/announcements?id=${annId}`,
         isRead: readIds.has(notifId),
       });
     });
@@ -84,7 +86,8 @@ export async function GET(req: NextRequest) {
     recentLeaves.forEach((l) => {
       const lt = ltMap.get(l.leaveTypeId);
       const emp = empMap.get(l.employeeId);
-      const notifId = `leave_${l.id || l._id}_${l.status}`;
+      const leaveId = l.id || l._id?.toString();
+      const notifId = `leave_${leaveId}_${l.status}`;
 
       let title = '';
       let message = '';
@@ -108,13 +111,16 @@ export async function GET(req: NextRequest) {
         notifications.push({
           id: notifId,
           type: 'LEAVE',
+          targetId: leaveId,
+          targetStatus: l.status,
+          targetCategory: 'LEAVE',
           title,
           message,
           priority: l.status === 'PENDING' ? 'HIGH' : 'NORMAL',
           status: l.status,
           timestamp: l.updatedAt || l.createdAt,
           timeAgo: l.updatedAt ? formatDistanceToNow(new Date(l.updatedAt), { addSuffix: true }) : '',
-          link: isManagerOrAdmin ? '/approvals' : '/leaves',
+          link: `/approvals?tab=LEAVES&status=${l.status}&id=${leaveId}`,
           isRead: readIds.has(notifId),
         });
       }
@@ -134,7 +140,8 @@ export async function GET(req: NextRequest) {
 
     recentRegs.forEach((r) => {
       const emp = empMap.get(r.employeeId);
-      const notifId = `reg_${r.id || r._id}_${r.status}`;
+      const regId = r.id || r._id?.toString();
+      const notifId = `reg_${regId}_${r.status}`;
 
       let title = '';
       let message = '';
@@ -158,17 +165,73 @@ export async function GET(req: NextRequest) {
         notifications.push({
           id: notifId,
           type: 'REGULARIZATION',
+          targetId: regId,
+          targetStatus: r.status,
+          targetCategory: 'REGULARIZATION',
           title,
           message,
           priority: r.status === 'PENDING' ? 'HIGH' : 'NORMAL',
           status: r.status,
           timestamp: r.updatedAt || r.reviewedAt || r.createdAt,
           timeAgo: r.createdAt ? formatDistanceToNow(new Date(r.createdAt), { addSuffix: true }) : '',
-          link: isManagerOrAdmin ? '/approvals' : '/daily-attendance',
+          link: `/approvals?tab=REGULARIZATIONS&status=${r.status}&id=${regId}`,
           isRead: readIds.has(notifId),
         });
       }
     });
+
+    // 5. Fetch Payslip Download Clearance Updates
+    try {
+      const db = await (await import('@/lib/mongodb')).getMongoDb();
+      const pdrCol = db.collection('payslip_download_requests');
+      let pdrFilter: Record<string, any> = {};
+      if (!isManagerOrAdmin) {
+        pdrFilter = { employeeId };
+      }
+      const recentPdrs = await pdrCol.find(pdrFilter).sort({ requestedAt: -1 }).limit(10).toArray();
+      recentPdrs.forEach((p) => {
+        const emp = empMap.get(p.employeeId);
+        const pdrId = p.id || p._id?.toString();
+        const notifId = `pdr_${pdrId}_${p.status}`;
+
+        let title = '';
+        let message = '';
+        if (p.status === 'APPROVED') {
+          title = `Payslip Authorized: Month ${p.month}/${p.year}`;
+          message = isManagerOrAdmin && p.employeeId !== employeeId
+            ? `Payslip download for ${emp?.name || 'Staff'} authorized.`
+            : `Your payslip download for Month ${p.month}/${p.year} has been AUTHORIZED.`;
+        } else if (p.status === 'REJECTED') {
+          title = `Payslip Denied: Month ${p.month}/${p.year}`;
+          message = isManagerOrAdmin && p.employeeId !== employeeId
+            ? `Payslip download for ${emp?.name || 'Staff'} denied.`
+            : `Your payslip download for Month ${p.month}/${p.year} was DENIED.${p.rejectionReason ? ` Reason: ${p.rejectionReason}` : ''}`;
+        } else if (p.status === 'PENDING' && isManagerOrAdmin) {
+          title = `Action Required: Payslip Authorization`;
+          message = `${emp?.name || 'Employee'} requested clearance to download Month ${p.month}/${p.year} payslip.`;
+        }
+
+        if (title) {
+          notifications.push({
+            id: notifId,
+            type: 'PAYSLIP',
+            targetId: pdrId,
+            targetStatus: p.status,
+            targetCategory: 'PAYSLIP',
+            title,
+            message,
+            priority: p.status === 'PENDING' ? 'HIGH' : 'NORMAL',
+            status: p.status,
+            timestamp: p.reviewedAt || p.requestedAt,
+            timeAgo: p.requestedAt ? formatDistanceToNow(new Date(p.requestedAt), { addSuffix: true }) : '',
+            link: isManagerOrAdmin
+              ? `/approvals?tab=PAYSLIPS&status=${p.status}&id=${pdrId}`
+              : `/payroll?id=${pdrId}`,
+            isRead: readIds.has(notifId),
+          });
+        }
+      });
+    } catch {}
 
     // Sort all notifications newest first
     notifications.sort((a, b) => new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime());
